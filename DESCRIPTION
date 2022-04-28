@@ -1,0 +1,21 @@
+Package: MatisseADEME
+Title: Matisse - ADEME
+Version: 0.0.0.9000
+Author: Emilien Ravigne <ravigne@centre-cired.fr> Frédéric Ghersi <ghersi@centre-cired.fr> Matthieu Petiteville <matthieu.petiteville@gmail.com>
+Maintainer: Matthieu Petiteville <matthieu.petiteville@gmail.com>
+Description: Microsimulation model of the transition - ADEME
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+Imports:
+  tidyverse,
+  readxl,
+  FinancialMath,
+  plyr,
+  pracma,
+  data.table,
+  car
+
+
