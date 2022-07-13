@@ -29,7 +29,7 @@ apply_historical_trend_effect <- function(MatisseData){
 
 
   #Calcul des valeurs initiales d'IPStone et variation de dépenses
-  price_index_hor_df <- price_index_sub %>% filter(year == MatisseParams$horizon) %>% select(-year) %>% mutate(Hors_budget = 1, Others = 1)
+  price_index_hor_df <- price_index_sub %>% filter(year == MatisseParams$year_hor) %>% select(-year) %>% mutate(Hors_budget = 1, Others = 1)
   last_spending_df <- spending_aggr_sub
   men_elast_sub$IPStone <- MatisseADEME:::get_IPStone(last_spending_df, price_index_hor_df)
   spending_var_sub$IPStone <- men_elast_sub$IPStone
@@ -77,9 +77,9 @@ apply_historical_trend_effect <- function(MatisseData){
 #'
 #' @param menage_typo_df A dataframe containing the ident_men, typo and deciles of income
 #' @param spending_aggr A spending dataframe
-#' @param price_index_hor_df A price dataframe that provides one line with the growth factor at the horizon
+#' @param price_index_hor_df A price dataframe that provides one line with the growth factor at the year_hor
 #' @param spending_var_sub A dataframe containing 3 columns IDENT_MEN, SpendingRef the current spending at ref year, SpendingHor,
-#' the current spending at horizon
+#' the current spending at year_hor
 #'
 #' @return Returns a transformed spending_econo
 #' @export
@@ -96,13 +96,20 @@ apply_elasticities <- function(men_elast_df, spending_aggr, price_index_hor_df, 
   #Data
   spending_var_sub_df$TC_Spending_IPS <-  spending_var_sub_df$FC_Spending / spending_var_sub_df$IPStone - 1
 
+  #Transco MatisseAggr -> Econometry
+  transco_sect <- get_csv_data(to_include = c("transco_sect"))$transco_sect
+  transco_sect <- transco_sect %>%
+    select(MatisseAggr, Econometry) %>%
+    filter(!(is.na(MatisseAggr))) %>%
+    distinct()
+
   #Calcul des modifications de dépenses
   spending_res_df <- spending_aggr
   sect_vec <- colnames(spending_aggr %>% select(-IDENT_MEN))
   for(sect_it in sect_vec){
     #String des élasticités
-    EP <- paste("EP_",sect_it,sep="")
-    ER <- paste("ER_",sect_it,sep="")
+    EP <- paste("EP_",transco_sect %>% filter(MatisseAggr == sect_it) %>% pull(Econometry),sep="")
+    ER <- str_replace(EP, "EP_", "ER_")
 
     #Calcul budget élasticités
     spending_res_df[[sect_it]] <-

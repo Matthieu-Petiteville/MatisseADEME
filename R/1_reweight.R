@@ -142,12 +142,12 @@ reweight_population <- function(MatisseData, pop_proj, men_proj, surf_proj, auto
     ref_df[[men_dum]] <- sum(menage_sub[[men_dum]] * menage_sub$pondmen)
   }
 
-  #Target : on all variables, the value at the horizon year
+  #Target : on all variables, the value at the year_hor year
   target_df <- data.frame(npers =
-                            sum(pop_proj %>% filter(year == MatisseParams$horizon) %>% select(value)) /
+                            sum(pop_proj %>% filter(year == MatisseParams$year_hor) %>% select(value)) /
                             sum(pop_proj %>% filter(year == MatisseParams$year_ref) %>% select(value)) *
                             ref_df$npers[1])
-  target_df$nmen <- sum(men_proj %>% filter(year == MatisseParams$horizon, type == "Total") %>% select(value)) /
+  target_df$nmen <- sum(men_proj %>% filter(year == MatisseParams$year_hor, type == "Total") %>% select(value)) /
     sum(men_proj %>% filter(year == MatisseParams$year_ref, type == "Total") %>% select(value)) *
     ref_df$nmen[1]
   for(ind_dum in ind_dum_vec){
@@ -160,22 +160,22 @@ reweight_population <- function(MatisseData, pop_proj, men_proj, surf_proj, auto
   #For the house surfaces, apply to the initial surfaces the growth from surf_proj
   col_it <- "SURFHAB"
   target_df[[col_it]] <- as.numeric(ref_df[[col_it]] *
-                        as.numeric(surf_proj %>% filter(year == MatisseParams$horizon) %>% select(value)) /
-                          as.numeric(surf_proj %>% filter(year == MatisseParams$year_ref) %>% select(value)))
+                         as.numeric(surf_proj %>% filter(year == MatisseParams$year_hor) %>% select(value)) /
+                         as.numeric(surf_proj %>% filter(year == MatisseParams$year_ref) %>% select(value)))
 
   #For the vehicles, apply to the initial parc the growth from auto_proj
   col_it <- "NbVehic"
   target_df[[col_it]] <- as.numeric(ref_df[[col_it]] *
-                                      as.numeric(auto_proj %>% filter(year == MatisseParams$horizon) %>% select(value)) /
-                                      as.numeric(auto_proj %>% filter(year == MatisseParams$year_ref) %>% select(value)))
+                         as.numeric(auto_proj %>% filter(year == MatisseParams$year_hor) %>% select(value)) /
+                         as.numeric(auto_proj %>% filter(year == MatisseParams$year_ref) %>% select(value)))
 
 
   #For the variables that are affected by the demographic projection, we calculate new values based on men_proj and pop_proj
-  #The typmen class of variables are aligned on men_proj as a ratio of the total household population at the horizon
+  #The typmen class of variables are aligned on men_proj as a ratio of the total household population at the year_hor
   for(col_it in colnames(target_df)[grep("TYPMEN5", colnames(target_df))]){
     target_df[[col_it]] <- as.numeric(
-      men_proj %>% filter(year == MatisseParams$horizon, type == col_it) %>% select(value) /
-        men_proj %>% filter(year == MatisseParams$horizon, type == "Total") %>% select(value) *
+      men_proj %>% filter(year == MatisseParams$year_hor, type == col_it) %>% select(value) /
+        men_proj %>% filter(year == MatisseParams$year_hor, type == "Total") %>% select(value) *
         target_df$nmen)
   }
 
@@ -184,7 +184,7 @@ reweight_population <- function(MatisseData, pop_proj, men_proj, surf_proj, auto
   for (col_it in col_vec){
     bucket_short <- gsub("AgeSex_","",col_it)
     target_df[[col_it]] <- as.numeric(ref_df[[col_it]] *
-                                        pop_proj %>% filter(year == MatisseParams$horizon, bucket_id == all_of(bucket_short)) %>% select(value) /
+                                        pop_proj %>% filter(year == MatisseParams$year_hor, bucket_id == all_of(bucket_short)) %>% select(value) /
                                         pop_proj %>% filter(year == MatisseParams$year_ref, bucket_id == all_of(bucket_short)) %>% select(value))
   }
   adj_ratio <- target_df$npers / sum(target_df[, col_vec])

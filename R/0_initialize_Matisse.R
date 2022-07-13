@@ -14,7 +14,11 @@ initialize_MatisseLibraries <- function(){
   library(haven) #Used for reading sas7 data files
   library(quadprog) #Used for solver
   library(readxl) #Used for reading
+  library(FactoMineR) #Used for ACP
+  library(FinancialMath) #Used for amort.period
   return(TRUE)
+
+  options(dplyr.summarise.inform = FALSE)
 
 }
 
@@ -48,7 +52,7 @@ initialize_MatisseFiles <- function(){
     "men_proj_csv"    = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/INSEE/men_proj.csv", sep=""),
 
     ##ThreeMe
-    "sorties3me_csv"  = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/ThreeME/Sorties_ThreeMe.csv", sep=""),
+    "sorties3me_csv"  = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/ThreeME/Sorties_ThreeMe_",MatisseParams$scenario,".csv", sep=""),
 
     ##Transco
     "transco_sect_csv"      = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/Matisse/Transco_Secteurs.csv", sep=""),
@@ -61,12 +65,22 @@ initialize_MatisseFiles <- function(){
     "typo_men_csv"   = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/Econometrie/Typo_Men.csv", sep=""),
     "elast_xl"       = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/Econometrie/elasticite_demande_finale.xlsX", sep=""),
     "app_pctelec_rd" = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/Matisse/appariement_bdf_entd.Rdata", sep=""),
+    "phebus_csv"     = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/Phebus/Phebus.csv", sep=""),
 
     #Transition
-    "transition_csv" = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/Matisse/Transition.csv", sep="")
+    "transition_csv" = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_INPUT")), "/Matisse/Transition.csv", sep=""),
 
+    #Output
+    "save_folder" = paste(gsub("\\\\", "/", Sys.getenv("MATISSE_OUTPUT")), "/",
+                               MatisseParams$scenario, "_", MatisseParams$year_hor, sep="")
   )
-  return(MatisseFiles)
+
+  #Creation du folder
+  if(!dir.exists(MatisseFiles$save_folder)){
+    dir.create(MatisseFiles$save_folder)
+  }
+
+  return(TRUE)
 
 }
 
@@ -74,50 +88,30 @@ initialize_MatisseFiles <- function(){
 
 
 # initialize_MatisseParams --------------------------------------------------------------------------------------------------------------------------------
-#' initialize_MatisseParams
+#' @title initialize_MatisseParams
+#' @description The initial setting of MatisseParams
 #'
-#' @param MatisseParams$scenario The MatisseParams$scenario from 3ME : values AMS, AME
-#' @param MatisseParams$horizon The year for the end of the simulation. Standard values : 2025, 2030, 2035
-#' @param MatisseParams$redistribution The type of retrocession of the carbon tax.
-#' @param classement The way to select households to have a technical change for houses (Optimiste, Median, Pessimiste and other values)
-#' @param class_force_bascule When doing technical change, this forces all new houses of class X or better to migrate out of fossil energies
-#' @param year_new_bascule The year after which all new buildings are out of fossil energies
-#' @param bascule_min_jump The minimum number of DPE class changes that will result in being completely out of fossil energies
-#' @param classement_veh The way to select households to switch to electric vehicule (Optimiste, Median, Pessimiste)
-#' @param dom_effic_source A dataframe with 2 columns, which for each energy source forces an efficiency parameter
-#' @param classement_bascule The classification for bascule priorisation
-#' @param alignement_3ME A boolean indicating whether to align emissions on 3ME data
-#' @param align_class_bascule The classes for which you allow bascule forcing to reach 3ME targets
-#' @param align_yearnew_bascule A list of 2 arguments (fio and gaz) the gives the year for
-#' @param align_jump_bascule The minimum jump in DPE due to renovation  after which you excludes fossiles to reach 3ME targets
+#' @param pop_age_buckets The buckets of age pop split (for repond)
+#' @param year_ref The year considered as the reference
+#' @param year_hor The year for the end of the simulation. Standard values : 2035, 2050
+#' @param scenario The scenario from 3ME : values S1->S4
+#' @param classement_dom The way to select households to have a technical change for houses (Cost_dec standard)
+#' @param classement_veh The way to select households to switch to electric vehicule (Cost_dec standard)
+#' @param save_intermed_file Should intermediary files be saved
 #'
 #' @return  TRUE but creates MatisseParams, a global variable, a list that contains all the params
 #' @export
 #'
 #' @examples
-#' initialize_MatisseParams(scenario = "AMS", horizon = 2035)
+#' initialize_MatisseParams(scenario = "S1", year_hor = 2035)
 #' initialize_MatisseParams()
 initialize_MatisseParams <-
   function(pop_age_buckets = c(15, 30, 45, 60, 75),
            year_ref = 2017,
-           scenario = "AMS",
-           horizon = 2035,
-           iter = 0,
-           redistribution = "forfait",
-           vec_dec = c(),
-           vec_tuu = c(),
-           classement = "Optimiste",
-           class_force_bascule = c(),
-           year_new_bascule = 2100,
-           bascule_min_jump = 7,
-           classement_veh = "Optimiste",
-           veh_effic_VT = 0,
-           dom_effic_source = c(),
-           classement_bascule = "Optimiste",
-           alignement_3ME = TRUE,
-           align_class_bascule = "A",
-           align_yearnew_bascule = list(Fuel = 2021, Gaz = 2021),
-           align_jump_bascule = 2,
+           year_hor = 2035,
+           scenario = "S1",
+           classement_dom = "Cost_dec",
+           classement_veh = "Cost_dec",
            save_intermed_file = FALSE) {
 
 
@@ -128,24 +122,10 @@ initialize_MatisseParams <-
     MatisseParams <<- list(
       pop_age_buckets = pop_age_buckets,
       year_ref = year_ref,
+      year_hor = year_hor,
       scenario = scenario,
-      horizon = horizon,
-      redistribution = redistribution,
-      vec_dec = vec_dec,
-      vec_tuu = vec_tuu,
-      classement = classement,
-      class_force_bascule = class_force_bascule,
-      iter = iter,
-      year_new_bascule = year_new_bascule,
-      bascule_min_jump = bascule_min_jump,
-      dom_effic_source = dom_effic_source,
+      classement_dom = classement_dom,
       classement_veh = classement_veh,
-      veh_effic_VT = veh_effic_VT,
-      alignement_3ME = alignement_3ME,
-      classement_bascule = classement_bascule,
-      align_class_bascule = align_class_bascule,
-      align_yearnew_bascule = align_yearnew_bascule,
-      align_jump_bascule = align_jump_bascule,
       save_intermed_file = save_intermed_file
     )
   return(TRUE)

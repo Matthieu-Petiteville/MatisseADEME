@@ -14,8 +14,17 @@
 #' get_spending(MatisseData)
 get_spending <- function(MatisseData){
 
+  #Données
   c05_sub <- MatisseData$c05
-  return(aggregate_spending(init_df = c05_sub, from = "BDF", to = "Matisse", cat = "Spending"))
+  menage_sub <- MatisseData$menage
+  depmen_sub <- MatisseData$depmen
+
+  spending_aggr_sub <- aggregate_spending(init_df = c05_sub, from = "BDF", to = "Matisse", cat = "Spending")
+
+  #Correction du champs M04.5.0 : consommation élec et gaz mixée
+  spending_aggr_sub <- MatisseADEME:::correct_gazelec(spending_aggr_sub, MatisseData)
+
+  return(spending_aggr_sub)
 
 }
 
@@ -64,10 +73,8 @@ get_income <- function(MatisseData){
     menage_sub[[rev_it]] <- rowSums(menage_sub[, BDF_names_vec$BDF])
     attr(menage_sub[[rev_it]], "label") <- transco_rev_sub$MatisseLibelle[which(transco_rev_sub$Matisse == rev_it)[1]]
   }
-  menage_sub$Rev_TaxeCarbone <- 0
-  attr(menage_sub$Rev_TaxeCarbone, "label") <- "Revenus de retrocession de la taxe carbone par menage"
 
-  income_sub <- menage_sub %>% select (c("IDENT_MEN",all_of(rev_vec), "Rev_TaxeCarbone"))
+  income_sub <- menage_sub %>% select (c("IDENT_MEN",all_of(rev_vec)))
 
   return(income_sub)
 }
@@ -119,7 +126,7 @@ get_taxes <- function(MatisseData){
 #' get_savings(MatisseData)
 get_savings <- function(MatisseData, type = "ref"){
 
-#Local
+  #Local
   menage_sub <- MatisseData$menage
   if(type == "ref"){
     income_sub <- MatisseData$income
@@ -131,7 +138,7 @@ get_savings <- function(MatisseData, type = "ref"){
   spending_sub <- MatisseData$spending
   durable_sub <- MatisseData$durable
 
-#Filtrage sur les ménages présents dans les 3 df
+  #Filtrage sur les ménages présents dans les 3 df
   valid_id <- unique(intersect(durable_sub$IDENT_MEN,
                     intersect(spending_sub$IDENT_MEN,
                     intersect(income_sub$IDENT_MEN, taxes_sub$IDENT_MEN))))
@@ -140,7 +147,7 @@ get_savings <- function(MatisseData, type = "ref"){
   spending_sub <- spending_sub %>% filter(IDENT_MEN %in% valid_id) %>% select(-IDENT_MEN)
   durable_sub <- durable_sub %>% filter(IDENT_MEN %in% valid_id) %>% select(-IDENT_MEN)
 
-#Calcul des résidus (épargne = income - taxes - spending)
+  #Calcul des résidus (épargne = income - taxes - spending)
   savings_df <- tibble(IDENT_MEN = menage_sub$IDENT_MEN)
   savings_df <- savings_df %>% mutate(Income = rowSums(income_sub),
                                       Taxes = rowSums(taxes_sub),
@@ -152,3 +159,85 @@ get_savings <- function(MatisseData, type = "ref"){
   return(savings_df)
 
 }
+
+
+
+#' @title correct_gazelec
+#' @description This function corrects the category M04.5.0 which is undissociated gaz and elec for households
+#' that have a common bill. It is based on a simple regression based on the main source of heating.
+#'
+#' @param spending_aggr A spending_aggr tibble
+#' @param MatisseData A MatisseData tibble
+#'
+#' @return
+#'
+#' @examples
+#' correct_gazelec(spending_aggr, MatisseData)
+correct_gazelec <- function(spending_aggr, MatisseData){
+
+  #Data
+  spending_aggr_sub <- spending_aggr
+  menage_sub <- MatisseData$menage
+  depmen_sub <- MatisseData$depmen
+  transco_sect_sub <- MatisseData$transco_sect
+  gaz_col <- transco_sect_sub %>% filter(MatisseSubCat == "GazDom") %>% pull(Matisse)
+  elec_col <- transco_sect_sub %>% filter(MatisseSubCat == "Elec") %>% pull(Matisse)
+  gazelec_col <- transco_sect_sub %>% filter(MatisseSubCat == "MixedElecGazDom") %>% pull(Matisse)
+
+  #Prepare data for regression
+  reg_data <- tibble(IDENT_MEN = spending_aggr_sub$IDENT_MEN,
+    GazElec = spending_aggr_sub[[gazelec_col]],
+    Gaz = spending_aggr_sub[[gaz_col]],
+    Elec = spending_aggr_sub[[elec_col]]) %>%
+    mutate(All = Gaz + Elec + GazElec)
+  col_to_keep <- colnames(reg_data)
+  #Ajout de données de la table depmen
+  reg_data <- reg_data %>%
+    left_join(depmen_sub, by = "IDENT_MEN") %>%
+    mutate(Source_Chauff = as.numeric(Sourcp),
+           Chauff_Collec = replace_na(as.numeric(Tchof), 0))%>%
+    mutate(Elec_Chauff = Source_Chauff == 1,
+           Gaz_Chauff = Source_Chauff == 2,
+           Oth_Chauff = Source_Chauff > 2) %>%
+    select(all_of(col_to_keep), Elec_Chauff, Gaz_Chauff, Oth_Chauff, Chauff_Collec, Stalog, SURFHAB_D)
+  col_to_keep <- colnames(reg_data)
+  #Ajout des données de la table menage
+  reg_data <- reg_data %>%
+    left_join(menage_sub, by = "IDENT_MEN") %>%
+    select(all_of(col_to_keep), DNIVIE2)
+  #Calcul des colonnes 'naïves'
+  reg_data <- reg_data %>%
+    mutate(Elec_Chauff_n = Elec_Chauff * All,
+           Gaz_Chauff_n = Gaz_Chauff * All ,
+           Oth_Chauff_n = Oth_Chauff * All)
+
+
+  reg_data_exp <- reg_data %>%
+    filter(!(is.na(All)), GazElec == 0, !(is.na(Elec_Chauff)))
+  reg_data_est <- reg_data %>%
+    filter(!(is.na(All)), GazElec != 0, !(is.na(Elec_Chauff)))
+
+  #Régression
+  est_cout_km <- lm(Gaz ~ 0 + All + Elec_Chauff_n + Gaz_Chauff_n + Oth_Chauff_n + Chauff_Collec + DNIVIE2,
+                    data = reg_data_exp)
+  reg_data_est$Gaz_est <- predict(est_cout_km, newdata = reg_data_est)
+  reg_data_est <- reg_data_est %>%
+    mutate(Gaz_fix = pmax(Gaz,pmin(Gaz_est, GazElec))) %>%
+    mutate(Gaz = Gaz + Gaz_fix) %>%
+    mutate(Elec = All - Gaz)
+
+  #Injection dans la table initiale
+  l_idx <- which(reg_data$IDENT_MEN %in% reg_data_est$IDENT_MEN)
+  reg_data$Gaz[l_idx] <- reg_data_est$Gaz
+  reg_data$Elec[l_idx] <- reg_data_est$Elec
+  spending_aggr_sub[[gazelec_col]] <- 0
+  spending_aggr_sub[[gaz_col]] <- reg_data$Gaz
+  spending_aggr_sub[[elec_col]] <- reg_data$Elec
+
+  return(spending_aggr_sub)
+
+}
+
+
+
+

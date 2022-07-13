@@ -39,7 +39,7 @@ apply_transition_effect <- function(MatisseData){
                     mutate(SpendingRef = spending_aggr_sub %>% select(-IDENT_MEN) %>% rowSums()) %>%
                     select(IDENT_MEN, SpendingRef) %>%
                     mutate(SpendingHor = SpendingRef)
-  price_index_hor_df <- price_index_sub %>% filter(year == MatisseParams$horizon) %>% select(-year) %>% mutate(Hors_budget = 1, Others = 1)
+  price_index_hor_df <- price_index_sub %>% filter(year == MatisseParams$year_hor) %>% select(-year) %>% mutate(Hors_budget = 1, Others = 1)
 
   spending_trans_df <- spending_aggr_sub
   for(sect_it in sect_vec){
@@ -73,20 +73,23 @@ apply_teletravail_effect <- function(menage_sub, effet_mat_df){
   #Data
   transition_df <- get_csv_data(to_include = c("transition"))$transition
   transition_df <- transition_df %>%
-                    filter(Type == "Teletravail", Year %in% c(MatisseParams$year_ref, MatisseParams$horizon)) %>%
+                    filter(Type == "Teletravail", Year %in% c(MatisseParams$year_ref, MatisseParams$year_hor)) %>%
                     select(Year, Value)
-  sector_affected <- get_csv_data("transco_sect_econo")$transco_sect_econo
-  sector_affected <- sector_affected %>% filter(Type == "Transport fuels") %>% pull(Sector)
+  transco_sect <- get_csv_data(to_include = c("transco_sect"))$transco_sect
+  transco_sect <- transco_sect %>%
+    filter(LibelleMatisseAggr == "Carburant Transport") %>%
+    pull(MatisseAggr) %>%
+    unique()
 
   #Matrice d'application du télétravail : 1 si pas d'effet (retraités, actifs non occupés), tt_ratio si oui
   tt_df <- menage_sub %>% select(IDENT_MEN) %>% mutate(teletravail = 1)
   l_idx <- which(menage_sub$NACTOCCUP > 0)
-  tt_ratio <- (transition_df %>% filter(Year  == MatisseParams$horizon) %>% pull(Value)) /
+  tt_ratio <- (transition_df %>% filter(Year  == MatisseParams$year_hor) %>% pull(Value)) /
     (transition_df %>% filter(Year  == MatisseParams$year_ref) %>% pull(Value))
   tt_df$teletravail[l_idx] <- tt_ratio
 
   #Application de l'effet
-  for(sect_it in sector_affected){
+  for(sect_it in transco_sect){
     effet_mat_df[[sect_it]] <- effet_mat_df[[sect_it]] * tt_df$teletravail
   }
 
@@ -109,15 +112,18 @@ apply_ecoconduite <- function(effet_mat_df){
   #Data
   transition_df <- get_csv_data(to_include = c("transition"))$transition
   transition_df <- transition_df %>%
-    filter(Type == "Ecoconduite", Year %in% c(MatisseParams$year_ref, MatisseParams$horizon)) %>%
+    filter(Type == "Ecoconduite", Year %in% c(MatisseParams$year_ref, MatisseParams$year_hor)) %>%
     select(Year, Value)
-  sector_affected <- get_csv_data("transco_sect_econo")$transco_sect_econo
-  sector_affected <- sector_affected %>% filter(Type == "Transport fuels") %>% pull(Sector)
-  ec_ratio <- (transition_df %>% filter(Year  == MatisseParams$horizon) %>% pull(Value)) /
+  transco_sect <- get_csv_data(to_include = c("transco_sect"))$transco_sect
+  transco_sect <- transco_sect %>%
+    filter(LibelleMatisseAggr == "Carburant Transport") %>%
+    pull(MatisseAggr) %>%
+    unique()
+  ec_ratio <- (transition_df %>% filter(Year  == MatisseParams$year_hor) %>% pull(Value)) /
     (transition_df %>% filter(Year  == MatisseParams$year_ref) %>% pull(Value))
 
   #Application de l'effet
-  for(sect_it in sector_affected){
+  for(sect_it in transco_sect){
     effet_mat_df[[sect_it]] <- effet_mat_df[[sect_it]] * ec_ratio
   }
 

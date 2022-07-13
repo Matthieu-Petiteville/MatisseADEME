@@ -27,25 +27,33 @@ calculate_3ME_price_index <- function(){
   econo_vec <- MatisseADEME:::na_to_na(sort(unique(transco_3me_econo_df$Econometry)))
   econo_vec <- econo_vec[which(!is.na(econo_vec))]
 
+  #Transco en classes MatisseAggr
+  transco_sect <- get_csv_data(to_include = c("transco_sect"))$transco_sect
+  transco_sect <- transco_sect %>%
+    select(MatisseAggr, Econometry) %>%
+    distinct() %>%
+    arrange(MatisseAggr) %>%
+    filter(Econometry %in%  econo_vec)
+
   #Calcul des price index
-  res_df <- tibble(year = MatisseParams$year_ref:MatisseParams$horizon)
+  res_df <- tibble(year = MatisseParams$year_ref:MatisseParams$year_hor)
   for(econo_it in econo_vec){
     TM_sec_vec <- transco_3me_econo_df %>% filter(Econometry == econo_it) %>% pull(ThreeME)
 
     temp_vec <- sapply(res_df$year, function(x){
       #Extraction des valeurs de consommation domestique et importée quantité et prix, pour l'année x et l'année x-1
       q_y <- as.numeric(sorties_df %>%
-                          filter(Var %in% c(paste("CHD_", TM_sec_vec, sep=""), paste("CHM_", TM_sec_vec, sep="")),
-                                 year == all_of(x)) %>% pull(value))
+                filter(Var %in% c(paste("CHD_", TM_sec_vec, sep=""), paste("CHM_", TM_sec_vec, sep="")),
+                       year == all_of(x)) %>% pull(value))
       p_y <- as.numeric(sorties_df %>%
-                          filter(Var %in% c(paste("PCHD_", TM_sec_vec, sep=""), paste("PCHM_", TM_sec_vec, sep="")),
-                                 year == all_of(x)) %>% pull(value))
+                filter(Var %in% c(paste("PCHD_", TM_sec_vec, sep=""), paste("PCHM_", TM_sec_vec, sep="")),
+                       year == all_of(x)) %>% pull(value))
       q_y_1 <- as.numeric(sorties_df %>%
-                          filter(Var %in% c(paste("CHD_", TM_sec_vec, sep=""), paste("CHM_", TM_sec_vec, sep="")),
-                                 year == all_of(x)-1) %>% pull(value))
+                filter(Var %in% c(paste("CHD_", TM_sec_vec, sep=""), paste("CHM_", TM_sec_vec, sep="")),
+                       year == all_of(x)-1) %>% pull(value))
       p_y_1 <- as.numeric(sorties_df %>%
-                          filter(Var %in% c(paste("PCHD_", TM_sec_vec, sep=""), paste("PCHM_", TM_sec_vec, sep="")),
-                                 year == all_of(x)-1) %>% pull(value))
+                filter(Var %in% c(paste("PCHD_", TM_sec_vec, sep=""), paste("PCHM_", TM_sec_vec, sep="")),
+                       year == all_of(x)-1) %>% pull(value))
 
       #Calcul des indices de prix de Paasche , Laspeyres  et Fisher
       paasche <- sum(q_y * p_y) / sum(q_y * p_y_1)
@@ -61,13 +69,22 @@ calculate_3ME_price_index <- function(){
     attr(res_df[[econo_it]], "label") <- transco_3me_econo_df$Econometry_Description[which(transco_3me_econo_df$Econometry == econo_it)[1]]
   }
 
+  #Bascule en classe MatisseAggr
+  for(sect_it in 1:nrow(transco_sect)){
+    res_df[[transco_sect$MatisseAggr[sect_it]]] <- res_df[[transco_sect$Econometry[sect_it]]]
+  }
+  res_df <- res_df %>%
+    select(c(year, unique(transco_sect$MatisseAggr)))
+
   return(res_df)
 
 }
 
-#' @title calculate_3ME_conso
-#' @description This function returns, for the Econometry level of agregation, the consommation per sector based on the Sorties-3ME data.
 
+# calculate_3ME_conso -------------------------------------------------------------------------------------------------------------------------------------
+#' @title calculate_3ME_conso
+#' @description This function returns, for the Econometry level of agregation,
+#' the consommation per sector based on the Sorties-3ME data.
 #'
 #' @return A price dataframe with a year column and the price index for each of the Econometry sectors
 #' @export
@@ -80,9 +97,10 @@ calculate_3ME_conso <- function(){
   extract_csv <- get_csv_data(to_include = c("sorties3me", "transco_3me_econo"))
 
   #Sorties 3ME
-  sorties_df <- extract_csv$sorties3me
-  sorties_df <- sorties_df %>% filter(grepl('CHD_|CHM_', Var)) %>% gather(key = year , value = value , -c(1))
-  sorties_df <- sorties_df %>% arrange(Var, year)
+  sorties_df <- extract_csv$sorties3me %>%
+    filter(grepl('CHD_|CHM_', Var)) %>%
+    gather(key = year , value = value , -c(1)) %>%
+    arrange(Var, year)
 
   #Transco
   transco_3me_econo_df <- extract_csv$transco_3me_econo
@@ -90,7 +108,7 @@ calculate_3ME_conso <- function(){
   econo_vec <- econo_vec[which(!is.na(econo_vec))]
 
   #Calcul des price index
-  res_df <- data.frame(year = MatisseParams$year_ref:MatisseParams$horizon)
+  res_df <- tibble(year = MatisseParams$year_ref:MatisseParams$year_hor)
   for(econo_it in econo_vec){
     TM_sec_vec <- transco_3me_econo_df %>% filter(Econometry == econo_it) %>% pull(ThreeME)
 
@@ -103,10 +121,9 @@ calculate_3ME_conso <- function(){
                           filter(Var %in% c(paste("PCHD_", TM_sec_vec, sep=""), paste("PCHM_", TM_sec_vec, sep="")),
                                  year == all_of(x)) %>% pull(value))
 
-      #Calcul des indices de prix de Paasche , Laspeyres  et Fisher
-      sum_conso <- sum(q_y * p_y)
+      #Renvoi des quantités consommées à l'année y
+      return(sum(q_y * p_y))
 
-      return(sum_conso)
     })
     res_df[[econo_it]] <- temp_vec
   }
@@ -114,3 +131,7 @@ calculate_3ME_conso <- function(){
   return(res_df)
 
 }
+
+
+
+
