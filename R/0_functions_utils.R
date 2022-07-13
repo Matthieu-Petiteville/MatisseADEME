@@ -85,6 +85,8 @@ floor_by_value <- function(vector, value = 0){
 
 }
 
+
+# min_na --------------------------------------------------------------------------------------------------------------------------------------------------
 #' @title min_na
 #' @description A finer min that handles situations where the vector is empty or full of NA
 #'
@@ -107,6 +109,7 @@ min_na <- function(x = c(), ...){
 }
 
 
+# max_na --------------------------------------------------------------------------------------------------------------------------------------------------
 #' @title max_na
 #' @description A finer max that handles situations where the vector is empty or full of NA
 #'
@@ -128,3 +131,60 @@ max_na <- function(x = c(), ...){
 
 }
 
+
+# replace_nan ---------------------------------------------------------------------------------------------------------------------------------------------
+#' @title replace_nan
+#' @description Function that replaces NaN values with "by" parameter
+#'
+#' @param x An input object
+#' @param by The replacement for NaN values
+#' @param ...
+#'
+#' @return An object
+#' @export
+#'
+#' @examples
+#' replace_nan(c(NA, NaN, 1,2,3), by = 0)
+replace_nan <- function(x = c(), by = NA, ...){
+
+  if(is_tibble(x) | is.data.frame(x)){
+    for(x_it in names(x)){
+      l_idx <- which(is.nan(x[[x_it]]))
+      if(length(l_idx) > 0){
+        x[l_idx, x_it] <- by
+      }
+    }
+    return(x)
+  }
+  if(is.array(x) | is.vector(x)){
+    l_idx <- which(is.nan(x))
+    x[l_idx] <- by
+    return(x)
+  }
+  stop("Not supported x type for function : replace_nan")
+
+}
+
+
+
+# remove_item ---------------------------------------------------------------------------------------------------------------------------------------------
+
+#' @title remove_item
+#' @description Removes a vector of items from a vector
+#'
+#' @param x The vector
+#' @param item The item to be removed
+#'
+#' @return
+#' @export
+#'
+#' @examples
+remove_item <- function(x = c(), item = c()){
+
+  if(is.array(x) | is.vector(x)){
+    x <- x[which(!(x %in% item))]
+    return(x)
+  }
+  stop("Not supported x type for function : remove_item")
+
+}
