@@ -70,7 +70,7 @@ calculate_rdb <- function(menage, rev_vec){
 #'
 #' @examples
 #' aggregate_spending(c05, "BDF", "Matisse")
-aggregate_spending <- function(init_df, from, to, cat = c(), level = 4){
+aggregate_spending <- function(init_df, from, to, cat = c(), level = 4, silent = F){
 
 # Extract transco -----------------------------------------------------------------------------------------------------------------------------------------
   transco_sect <- get_csv_data(to_include = c("transco_sect"))$transco_sect
@@ -90,7 +90,7 @@ aggregate_spending <- function(init_df, from, to, cat = c(), level = 4){
   for(sect_it in sect_vec){
     sub_transco_sect <- transco_sect %>% filter(to_col == all_of(sect_it))
     sub_sect_vec <- unique(pull(sub_transco_sect, all_of(from)))
-    if(length(setdiff(sub_sect_vec, colnames(init_df)))>0){
+    if(length(setdiff(sub_sect_vec, colnames(init_df)))>0 & !silent){
       cat("Missing sector",setdiff(sub_sect_vec, colnames(init_df)),"in source dataframe\n")
     }
     sub_sect_vec <- intersect(sub_sect_vec, colnames(init_df))
@@ -221,7 +221,7 @@ get_men_elast_df <- function(menage){
 #' @param spending_econo_df A spending dataframe
 #' @param men_elast_df A men_elast dataframe with IdentMen Typo DNIVIE and the elasticities
 #' @param spending_var_df A spending_var datframe with SpendindgRef the sum of spending at the ref year, SpendingHor the target of spending at
-#' the horizon
+#' the year_hor
 #' @param price_index_hor_df The price vector. Used for the IP Stone calculation
 #' @param floor_at_z Boolean wether negative spendings are floored at zero
 #'
@@ -231,6 +231,12 @@ get_men_elast_df <- function(menage){
 #' @examples
 #' ventilate_solde(spending_econo_df,  men_elast_df, spending_var_df, price_index_hor_df, floor_at_z = T)
 ventilate_solde <- function(spending_econo_df,  men_elast_df, spending_var_df, price_index_hor_df, floor_at_z = T){
+
+  #Data
+  transco_sect <- get_csv_data(to_include = c("transco_sect"))$transco_sect
+  transco_sect <- transco_sect %>%
+    select(MatisseAggr, Econometry) %>%
+    distinct()
 
   #Calcul des modifications de dépenses
   spending_res_df <- spending_econo_df
@@ -251,8 +257,10 @@ ventilate_solde <- function(spending_econo_df,  men_elast_df, spending_var_df, p
 
     for(sect_it in sect_vec){
       #Application des élasticités en euros ref
+      ER <- paste("ER_",transco_sect %>% filter(MatisseAggr == sect_it) %>% pull(Econometry),sep="")
+
       spending_res_df[[sect_it]] <- init_spending_df[[sect_it]] / men_elast_df$IPStone *
-                              (1 + men_elast_df[[paste("ER_",sect_it,sep="")]] * (spending_solde_df$FC_Spending - 1))
+                              (1 + men_elast_df[[ER]] * (spending_solde_df$FC_Spending - 1))
       if(floor_at_z){spending_res_df[[sect_it]] <- MatisseADEME:::floor_by_value(spending_res_df%>% pull(sect_it), 0)}
       attr(spending_res_df[[sect_it]], "label") <- attr(spending_econo_df[[sect_it]], "label")
     }
@@ -393,6 +401,7 @@ get_vehic <- function(MatisseData){
   vehic <- vehic %>%
     mutate(DepCarb_NoZero = na_if(DepCarb, 0)) %>%
     mutate(DepCarb_est = coalesce(DepCarb_NoZero, Km_Auto_Y * cost_per_km_ave)) %>%
+    mutate(DepCarb2Elec_est = 0) %>%
     select(-DepCarb_NoZero)
 
   #Pour les ménages ayant des dépenses mais pas de km, on estime Km_Auto_est
@@ -519,4 +528,115 @@ get_parc_auto <- function(MatisseData){
   return(parc_auto)
 
 }
+
+
+# get_ener_3me ---------------------------------------------------------------------------------------------------------------------------------------------
+#' @title get_ener_3me
+#' @description Gets the domener data from Threeme : per energy, per year, volumes in kWh, price in ME/kWh,
+#' total in current M€. Autres is the sum of Solides and Petrole weighted per volume
+#'
+#' @param years The years on which to extract the data
+#'
+#' @return
+#'
+#' @examples
+#' get_ener_3me(2017)
+get_ener_3me <- function(years = c()){
+
+  #Consommations physiques
+  #Transco des Secteurs Threeme
+  transco_sect <- get_csv_data(to_include = c("transco_sect"))$transco_sect
+  transco_sect <- transco_sect %>%
+    filter(MatisseAggr %in% c("Gaz", "Elec", "Fioul", "Solide")) %>%
+    select(MatisseAggr, Econometry, ThreeMe) %>%
+    distinct() %>%
+    arrange(ThreeMe)
+
+
+
+  #Extraction des données ThreeMe de prix et volumes
+  threeme_ext <- get_threeme_data(years = years,
+                                  fields = c("^ENER_BUIL_H01_2._2$", "^PENER_BUIL_H01_2._2$"))
+  domener_sub <- threeme_ext %>%
+    mutate(Var = str_replace_all(Var, "PENER_BUIL_H01", "Price")) %>%
+    mutate(Var = str_replace_all(Var, "ENER_BUIL_H01", "Vol")) %>%
+    mutate(Var = str_replace_all(Var, transco_sect %>% pull(ThreeMe), transco_sect %>% pull(MatisseAggr)))%>%
+    separate(Var, c("Type", "Ener"), sep = "_") %>%
+    pivot_wider(id_cols = c(Type, Ener, year), names_from = Type) %>%
+    mutate(Total = Price * Vol)
+
+  #Ajout d'une donnée 'AutreEner' correspond ) Solide + Fioul. Utiliser uniquement pour niveaux de prix
+  sub_ext <- domener_sub %>%
+    filter(Ener %in% c("Solide", "Fioul")) %>%
+    group_by(year) %>%
+    select(-Ener) %>%
+    summarise(across(where(is.numeric), sum)) %>%
+    mutate(Price = Total / Vol) %>%
+    mutate(Ener = "AutreEner") %>%
+    relocate(Ener)
+  domener_sub <- domener_sub %>%
+    bind_rows(sub_ext) %>%
+    arrange(year)
+
+  return(domener_sub)
+
+}
+
+
+# get_ener --------------------------------------------------------------------------------------------------------------------------------------------
+#' @title get_ener
+#' @description Return an ener tibble with the domestic energy consumption for the 5 energy sources for house
+#' Gaz, Elec, Fioul, Solide, AutreEner. Energy is counted in current E, E/m², kWh and kWh/m²
+#'
+#' @param MatisseData A MatisseData list of all the data from Matisse
+#' @param year The year at which we are calculating the consumption
+#'
+#' @return An ener tibble
+#' @export
+#'
+#' @examples
+#' get_ener(MatisseData, 2017)
+get_ener <- function(MatisseData, year){
+
+  #Data
+  spending_aggr_sub <- MatisseData$spending_aggr
+  menage_sub <- MatisseData$menage
+
+  #Somme des dépenses d'énergie domestiques
+  transco_sect <- get_csv_data(to_include = c("transco_sect"))$transco_sect
+  transco_sect <- transco_sect %>%
+    filter(MatisseAggr %in% c("Gaz", "Elec", "Fioul", "Solide", "AutreEner")) %>%
+    select(MatisseAggr, Econometry) %>%
+    distinct()
+
+  #Calcul des consommaions énergétiques sous différentes formes (E, E/m², kWh, kWh/m²)
+  #Consommation en euros et euros/m2
+  ener_sub <- spending_aggr_sub %>%
+    select(IDENT_MEN) %>%
+    left_join(menage_sub %>% select(IDENT_MEN, SURFHAB), by = "IDENT_MEN")
+  for(ener_cpt in 1:nrow(transco_sect)){
+    ener_sub[[transco_sect$MatisseAggr[ener_cpt]]] <- spending_aggr_sub[[transco_sect$MatisseAggr[ener_cpt]]]
+  }
+  for(ener_it in transco_sect$MatisseAggr){
+    ener_sub[[paste(ener_it, "_Em2", sep = "")]] <- ener_sub[[ener_it]] / ener_sub$SURFHAB
+  }
+
+  #Consommation en kWh et kWh/m2
+  domener <- MatisseADEME:::get_ener_3me(years = year)
+  for(ener_it in transco_sect$MatisseAggr){
+    #Prix en €/kWh
+    e_kwh <- domener %>% filter(Ener == ener_it) %>% pull(Price) * 1000000
+    ener_sub[[paste(ener_it, "_kWh", sep = "")]] <- ener_sub[[ener_it]] / e_kwh
+    ener_sub[[paste(ener_it, "_kWhm2", sep = "")]] <- ener_sub[[paste(ener_it, "_kWh", sep = "")]] / ener_sub$SURFHAB
+  }
+
+  #Ajout totaux
+  ener_sub$All  <- rowSums(ener_sub %>% select(transco_sect$MatisseAggr))
+  ener_sub$All_Em2 <- ener_sub$All / ener_sub$SURFHAB
+  ener_sub$All_kWh <- rowSums(ener_sub %>% select(paste(transco_sect$MatisseAggr, "_kWh", sep = "")))
+  ener_sub$All_kWhm2 <- ener_sub$All_kWh / ener_sub$SURFHAB
+
+  return(ener_sub)
+}
+
 
