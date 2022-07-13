@@ -10,7 +10,8 @@ calculate_3ME_conso()
 A price dataframe with a year column and the price index for each of the Econometry sectors
 }
 \description{
-This function returns, for the Econometry level of agregation, the consommation per sector based on the Sorties-3ME data.
+This function returns, for the Econometry level of agregation,
+the consommation per sector based on the Sorties-3ME data.
 }
 \examples{
 calculate_3ME_conso()

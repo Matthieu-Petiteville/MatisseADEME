@@ -15,10 +15,10 @@ apply_elasticities(
 \arguments{
 \item{spending_aggr}{A spending dataframe}
 
-\item{price_index_hor_df}{A price dataframe that provides one line with the growth factor at the horizon}
+\item{price_index_hor_df}{A price dataframe that provides one line with the growth factor at the year_hor}
 
 \item{spending_var_sub}{A dataframe containing 3 columns IDENT_MEN, SpendingRef the current spending at ref year, SpendingHor,
-the current spending at horizon}
+the current spending at year_hor}
 
 \item{menage_typo_df}{A dataframe containing the ident_men, typo and deciles of income}
 }

@@ -4,7 +4,7 @@
 \alias{aggregate_spending}
 \title{aggregate_spending}
 \usage{
-aggregate_spending(init_df, from, to, cat = c(), level = 4)
+aggregate_spending(init_df, from, to, cat = c(), level = 4, silent = F)
 }
 \arguments{
 \item{init_df}{A dataframe of the C05 format, with colnames expressed in the 'from' classification and an IDENT_MEN column}

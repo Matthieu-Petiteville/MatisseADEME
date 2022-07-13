@@ -17,13 +17,11 @@ A tibble with 3 columns : variable, year and value of the variable on given year
 \description{
 Extracts from the sorties_3me file the data into a 3 col dataframe : variable, year, value.
 Defaults extract all years and variables, specifying fields and years (vector entry) to only return the specified
-values
-}
-\details{
-get_threeme_data
+values. Accept Regexp expressions in fields. Will test for full value first, then on remaining ones do a regexp filter.
 }
 \examples{
 get_threeme_data()
 get_threeme_data(years = c("2015",2030))
 get_threeme_data(years = c("2015",2030), fields = c("POP_TOT", "Invalid", "VA_06_2"))
+get_threeme_data(years = c("2015",2030), fields = c("POP_TOT", "^PCHD_.*_2"))
 }

@@ -18,7 +18,7 @@ ventilate_solde(
 \item{men_elast_df}{A men_elast dataframe with IdentMen Typo DNIVIE and the elasticities}
 
 \item{spending_var_df}{A spending_var datframe with SpendindgRef the sum of spending at the ref year, SpendingHor the target of spending at
-the horizon}
+the year_hor}
 
 \item{price_index_hor_df}{The price vector. Used for the IP Stone calculation}
 

@@ -7,63 +7,35 @@
 initialize_MatisseParams(
   pop_age_buckets = c(15, 30, 45, 60, 75),
   year_ref = 2017,
-  scenario = "AMS",
-  horizon = 2035,
-  iter = 0,
-  redistribution = "forfait",
-  vec_dec = c(),
-  vec_tuu = c(),
-  classement = "Optimiste",
-  class_force_bascule = c(),
-  year_new_bascule = 2100,
-  bascule_min_jump = 7,
-  classement_veh = "Optimiste",
-  veh_effic_VT = 0,
-  dom_effic_source = c(),
-  classement_bascule = "Optimiste",
-  alignement_3ME = TRUE,
-  align_class_bascule = "A",
-  align_yearnew_bascule = list(Fuel = 2021, Gaz = 2021),
-  align_jump_bascule = 2,
+  year_hor = 2035,
+  scenario = "S1",
+  classement_dom = "Cost_dec",
+  classement_veh = "Cost_dec",
   save_intermed_file = FALSE
 )
 }
 \arguments{
-\item{classement}{The way to select households to have a technical change for houses (Optimiste, Median, Pessimiste and other values)}
+\item{pop_age_buckets}{The buckets of age pop split (for repond)}
 
-\item{class_force_bascule}{When doing technical change, this forces all new houses of class X or better to migrate out of fossil energies}
+\item{year_ref}{The year considered as the reference}
 
-\item{year_new_bascule}{The year after which all new buildings are out of fossil energies}
+\item{year_hor}{The year for the end of the simulation. Standard values : 2035, 2050}
 
-\item{bascule_min_jump}{The minimum number of DPE class changes that will result in being completely out of fossil energies}
+\item{scenario}{The scenario from 3ME : values S1->S4}
 
-\item{classement_veh}{The way to select households to switch to electric vehicule (Optimiste, Median, Pessimiste)}
+\item{classement_dom}{The way to select households to have a technical change for houses (Cost_dec standard)}
 
-\item{dom_effic_source}{A dataframe with 2 columns, which for each energy source forces an efficiency parameter}
+\item{classement_veh}{The way to select households to switch to electric vehicule (Cost_dec standard)}
 
-\item{classement_bascule}{The classification for bascule priorisation}
-
-\item{alignement_3ME}{A boolean indicating whether to align emissions on 3ME data}
-
-\item{align_class_bascule}{The classes for which you allow bascule forcing to reach 3ME targets}
-
-\item{align_yearnew_bascule}{A list of 2 arguments (fio and gaz) the gives the year for}
-
-\item{align_jump_bascule}{The minimum jump in DPE due to renovation  after which you excludes fossiles to reach 3ME targets}
-
-\item{MatisseParams$scenario}{The MatisseParams$scenario from 3ME : values AMS, AME}
-
-\item{MatisseParams$horizon}{The year for the end of the simulation. Standard values : 2025, 2030, 2035}
-
-\item{MatisseParams$redistribution}{The type of retrocession of the carbon tax.}
+\item{save_intermed_file}{Should intermediary files be saved}
 }
 \value{
 TRUE but creates MatisseParams, a global variable, a list that contains all the params
 }
 \description{
-initialize_MatisseParams
+The initial setting of MatisseParams
 }
 \examples{
-initialize_MatisseParams(scenario = "AMS", horizon = 2035)
+initialize_MatisseParams(scenario = "S1", year_hor = 2035)
 initialize_MatisseParams()
 }

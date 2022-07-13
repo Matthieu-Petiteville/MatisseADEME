@@ -4,20 +4,20 @@
 \alias{project_taxes}
 \title{project_taxes}
 \usage{
-project_taxes(MatisseData, proj_tax)
+project_taxes(MatisseData, tax_proj)
 }
 \arguments{
 \item{MatisseData}{A MatisseData list of all the data from Matisse}
 
-\item{proj_tax}{A dataframe containing the value (current value) for the different taxes categories}
+\item{tax_proj}{A dataframe containing the value (current value) for the different taxes categories}
 }
 \value{
 A taxes dataframe
 }
 \description{
-This function updates the taxes per household based on the proj_tax dataframe which provides the level for
-the ref year and the horizon. It adjusts by the growth of the population based on pondmen.
+This function updates the taxes per household based on the tax_proj dataframe which provides the level for
+the ref year and the year_hor. It adjusts by the growth of the population based on pondmen.
 }
 \examples{
-project_taxes(MatisseData, proj_tax)
+project_taxes(MatisseData, tax_proj)
 }

@@ -10,7 +10,7 @@ apply_transport_equipement(MatisseData)
 \item{MatisseData}{A MatisseData list of all the data from Matisse}
 }
 \value{
-A spending_aggr tibble
+A MatisseData list
 }
 \description{
 Applies the effect of transportation equipement (changes in personal car) to the MatisseData and

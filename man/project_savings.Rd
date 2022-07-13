@@ -4,31 +4,18 @@
 \alias{project_savings}
 \title{project_savings}
 \usage{
-project_savings(
-  pondmen_sub,
-  savings_rate_df,
-  savings_rate_horizon_df,
-  proj_sav,
-  col_saving
-)
+project_savings(MatisseData, sav_proj)
 }
 \arguments{
-\item{pondmen_sub}{A pondmen dataframe containing the old and new ponderation}
+\item{MatisseData}{A MatisseData list of all the data from Matisse}
 
-\item{savings_rate_df}{The standard savings_rate dataframe for ref year}
-
-\item{savings_rate_horizon_df}{The preformatted standard savings_rate dataframe for horizon year. Only RDB and IdentMen are meaningful.
-Savings and saving rates are recalculate in this function}
-
-\item{proj_sav}{The projected values for saving rate}
-
-\item{col_saving}{The column for Savings calculation (Savings or SavingsExDurable)}
+\item{sav_proj}{The projected values for saving rate}
 }
 \value{
 A saving_rate dataframe
 }
 \description{
-This function projects the saving rate dataframe to horizon, based on the initial savingrate, the projected values (proj_sav)
+This function projects the saving rate dataframe to year_hor, based on the initial savingrate, the projected values (proj_sav)
 and the column for savings (Savings or SavingsExDurable)
 }
 \examples{
