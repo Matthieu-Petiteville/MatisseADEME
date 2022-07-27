@@ -26,7 +26,6 @@ apply_transport_equipement <- function(MatisseData){
   automob_sub <- automob_sub %>%
     left_join(pondmen_sub %>% select(IDENT_MEN, pond_rew), by = "IDENT_MEN")
   nb_car_tot <- sum(automob_sub %>% filter(is_active) %>% pull(pond_rew))
-  auto_conso_proj_sub <- MatisseData$auto_conso_proj
 
   #Extraction des gains de performance moyenne par km
   MatisseData$VT_efficiency <- MatisseADEME:::get_VT_efficiency(MatisseData)
@@ -121,7 +120,9 @@ apply_transport_equipement <- function(MatisseData){
 
   }
 
+  Elec_conso <- MatisseData$spending_aggr$Elec
   MatisseData$spending_aggr <- MatisseADEME:::modify_budget_transport_equipement(MatisseData)
+  MatisseData$save_inter_data$Carb2Elec <- MatisseData$spending_aggr$Elec - Elec_conso
 
   return(MatisseData)
 }
@@ -309,6 +310,14 @@ apply_newcar_transformation <- function(MatisseData, attribute_new_car, year){
   VT_eff_sub <- MatisseData$VT_efficiency %>%
     rename(year_col = year)
 
+  #Table d'ajustement des consommations VT -> VE
+  auto_conso_proj_sub <- MatisseData$auto_conso_proj
+  auto_conso_proj_sub <- auto_conso_proj_sub %>%
+    rename(year_col = year) %>%
+    filter(year_col == year)
+  ratio_VT2VE_conso <- auto_conso_proj_sub %>% filter(AutoEner == "Elec") %>% pull(ConsoPerKm_Ekm) /
+                      auto_conso_proj_sub %>% filter(AutoEner == "Thermic") %>% pull(ConsoPerKm_Ekm)
+
   #Ajout du nombre de véhicules électriques vs fossiles
   parc_auto_sub <- parc_auto_sub %>%
     mutate(NbVehic_Foss = NbVehic_Ess + NbVehic_Die + NbVehic_GPL + NbVehic_Oth)
@@ -354,13 +363,13 @@ apply_newcar_transformation <- function(MatisseData, attribute_new_car, year){
       men_idx <- which(vehic_sub$IDENT_MEN == id_rep_VT_it)
       if(vehic_sub$NbVehic_Foss[men_idx] == 1){
         #Un seul véhicules fossiles à remplacer, toutes dépenses de carburants passées à 0
-        vehic_sub$DepCarb2Elec_est[men_idx] <- vehic_sub$DepCarb2Elec_est[men_idx] + vehic_sub$DepCarb_temp[men_idx]
+        vehic_sub$DepCarb2Elec_est[men_idx] <- vehic_sub$DepCarb2Elec_est[men_idx] + vehic_sub$DepCarb_temp[men_idx] * ratio_VT2VE_conso
         vehic_sub$DepCarb_temp[men_idx] <- 0
       }else{
         #Plusieurs véhicules fossiles, on suppose une répartition équivalente des dépenses dans tous les véhicules
         #On retire la part électrifiable des trajets (Pct_Elec)
         temp_depcarb <- vehic_sub$DepCarb_temp[men_idx] / vehic_sub$NbVehic_Foss[men_idx] * vehic_sub$Pct_Elec[men_idx]
-        vehic_sub$DepCarb2Elec_est[men_idx] <- vehic_sub$DepCarb2Elec_est[men_idx] + temp_depcarb
+        vehic_sub$DepCarb2Elec_est[men_idx] <- vehic_sub$DepCarb2Elec_est[men_idx] + temp_depcarb * ratio_VT2VE_conso
         vehic_sub$DepCarb_temp[men_idx] <- vehic_sub$DepCarb_temp[men_idx] - temp_depcarb
       }
     }
@@ -492,9 +501,7 @@ modify_budget_transport_equipement <- function(MatisseData){
     select(year, AutoEner, ConsoPerKm_Ekm) %>%
     pivot_wider(id_cols = c(year, AutoEner), names_from = AutoEner, values_from = ConsoPerKm_Ekm) %>%
     mutate(RatioVT2VE = Elec / Thermic)
-  ratio_cost_elec_foss <- auto_conso_proj_sub %>%
-    filter(year == MatisseParams$year_hor) %>%
-    pull(RatioVT2VE)
+
 
   transco_sect_sub <- MatisseData$transco_sect
   transco_sect_sub <- transco_sect_sub %>%
@@ -515,13 +522,10 @@ modify_budget_transport_equipement <- function(MatisseData){
 
   #Ajout de la consommation en électricité
   sect_elec <- transco_sect_sub %>% filter(LibelleMatisseAggr == "Electricite") %>% pull(MatisseAggr)
-  carbu_price_index <- as.numeric(price_index_hor_df$Carbu)
+  elec_price_index <- as.numeric(price_index_hor_df$Elec)
   # spending_trans_df[[sect_elec]] <- spending_trans_df[[sect_elec]] + (init_budg_fuel - spending_trans_df[[sect_fuel]]) * ratio_cost_elec_foss
   spending_trans_df[[sect_elec]] <- spending_trans_df[[sect_elec]] +
-    vehic_sub$DepCarb2Elec_est * carbu_price_index * ratio_cost_elec_foss
-
-  # a <- sum(spending_trans_df[[sect_elec]] * pondmen_sub$pond_rew)
-  # b <- a
+    vehic_sub$DepCarb2Elec_est * elec_price_index
 
 
   #Gestion du solde
