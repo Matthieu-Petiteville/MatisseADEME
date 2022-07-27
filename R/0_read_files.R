@@ -553,8 +553,6 @@ get_auto_conso_proj <- function(){
 
   #Extraction des consommations par classe et énergie pour les véhicules
   auto_conso_aggreg_df <- tibble()
-  price_index_hor <- auto_conso_proj %>%
-    filter(Type == "PriceIndex", year == MatisseParams$year_hor)
   for(ener_it in unique(auto_conso_proj$Ener)){
     for(class_it in LETTERS[1:7]){
       temp_auto_conso_proj <- auto_conso_proj %>%
@@ -567,12 +565,8 @@ get_auto_conso_proj <- function(){
           pivot_wider(id_cols = c(Type, year), names_from = Type)
 
         if("DepEur2006" %in% names(temp_auto_conso_proj)){
-          price_index_hor_ener <- price_index_hor %>%
-            filter(Ener == ener_it) %>%
-            pull(value)
-
           temp_auto_conso_proj <- temp_auto_conso_proj %>%
-            mutate(DepAuto_E = DepEur2006 * all_of(price_index_hor_ener)) %>%
+            mutate(DepAuto_E = DepEur2006 ) %>%
             select(year, DepAuto_E, KmAuto) %>%
             mutate(Class = class_it, Ener = ener_it)
 
@@ -678,7 +672,7 @@ get_renov_cost_proj <- function(){
 
   renov_cost <- renov_cost %>%
     separate(Var, into = c("Data", "Class", "ClassTo"), sep = "_", fill = "right") %>%
-    distinct()
+    distinct(across(c(Data, Class, ClassTo, year)), .keep_all = T)
 
   return(renov_cost)
 
