@@ -31,8 +31,9 @@ apply_transition_effect <- function(MatisseData){
   }
 
   #Calculate effects
-  effet_mat_df <-  MatisseADEME:::apply_teletravail_effect(menage_sub, effet_mat_df)
-  effet_mat_df <-  MatisseADEME:::apply_ecoconduite(effet_mat_df)
+  # effet_mat_df <-  MatisseADEME:::apply_teletravail_effect(menage_sub, effet_mat_df)
+  # effet_mat_df <-  MatisseADEME:::apply_ecoconduite(effet_mat_df)
+  effet_mat_df <- MatisseADEME:::apply_homothetic_reduction(effet_mat_df)
 
   #Apply
   spending_var_df <- spending_aggr_sub %>%
@@ -98,6 +99,7 @@ apply_teletravail_effect <- function(menage_sub, effet_mat_df){
 }
 
 
+# apply_ecoconduite ---------------------------------------------------------------------------------------------------------------------------------------
 #' @title apply_ecoconduite
 #' @description Apply the effect of ecoconduite on the consumption of transportation fuels
 #'
@@ -129,3 +131,35 @@ apply_ecoconduite <- function(effet_mat_df){
 
   return(effet_mat_df)
 }
+
+
+# apply_homothetic_reduction ---------------------------------------------------------------------------------------------------------------------------------------
+#' @title apply_homothetic_reduction
+#' @description Apply an homothetic reduction of consumption of energies
+#'
+#' @param effet_mat_df
+#'
+#' @return A chained effet_mat_df dataframe
+#'
+#' @examples
+#' apply_homothetic_reduction(effet_mat_df)
+apply_homothetic_reduction <- function(effet_mat_df){
+
+  #Data
+  transition_df <- get_csv_data(to_include = c("transition"))$transition
+  transition_df <- transition_df %>%
+    filter(Type == "Sobriete", Year == MatisseParams$year_hor, Scenario == MatisseParams$scenario) %>%
+    select(MatisseAggr, Year, Value) %>%
+    distinct()
+
+
+  #Application de l'effet
+  for(sect_it in transition_df$MatisseAggr){
+    ratio_red <- as.numeric(transition_df %>% filter(MatisseAggr == sect_it) %>% pull(Value))
+    if(length(ratio_red) == 0){ratio_red <- 1}
+    effet_mat_df[[sect_it]] <- effet_mat_df[[sect_it]] * ratio_red
+  }
+
+  return(effet_mat_df)
+}
+
