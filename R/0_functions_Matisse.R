@@ -280,6 +280,16 @@ ventilate_solde <- function(spending_econo_df,  men_elast_df, spending_var_df, p
     if(max(abs(ecart_iter), na.rm = TRUE) > 10^-3){KeepLooping <- T}else{KeepLooping <- F}
   }
 
+
+  #Correction des quelques résidus (écarts entre données estimées et spending solde)
+  col_vec <- colnames(spending_res_df %>% select(-IDENT_MEN))
+  adjust_fact_vec <- spending_solde_df$SpendingHor / spending_solde_df$SpendingSolde
+  for(col_it in col_vec){
+    spending_res_df[[col_it]] <- spending_res_df[[col_it]] *  adjust_fact_vec
+  }
+
+
+
   return(spending_res_df)
 
 }
