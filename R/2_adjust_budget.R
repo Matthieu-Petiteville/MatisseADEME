@@ -146,21 +146,34 @@ project_savings <- function(MatisseData, sav_proj){
     mutate(RDB = Income - Taxes) %>%
     mutate(Savings = RDB * SavingsRate)
 
+  #Première approximation de l'épargne : les dépenses croissent au rythme de variation des revenus
   savings_hor_sub <- savings_hor_sub %>%
-    mutate(MinGrowthRate = pmin(RDB / savings_ref_sub$RDB, Income / savings_ref_sub$Income, na.rm = T))
+    mutate(IncomeGrowthRate =  Income / savings_ref_sub$Income) %>%
+    mutate(IncomeGrowthRate = replace_na(IncomeGrowthRate, mean(IncomeGrowthRate, na.rm = T))) %>%
+    mutate(Spending = savings_ref_sub$Spending * IncomeGrowthRate) %>%
+    mutate(Durable = savings_ref_sub$Durable * IncomeGrowthRate) %>%
+    mutate(Savings = Income - Taxes - Spending - Durable)
 
 
-  #Correction des ménages avec des taux d'épargne hors norme (<-0.5, >0.5)
-  #Pour ceux là, on applique juste une transformation de l'épargne selon le facteur provenant de la variation des revenus
-  l_idx <- which(abs(savings_hor_sub$SavingsRate) > 1)
-  savings_hor_sub[l_idx, "Savings"] <- savings_ref_sub[l_idx, "Savings"] * savings_hor_sub[l_idx, "MinGrowthRate"]
-  #Correction des Savings = NaN
-  l_idx <- which(is.nan(savings_hor_sub$Savings))
-  savings_hor_sub[l_idx, "Savings"] <- savings_ref_sub[l_idx, "Savings"] *
-    (savings_hor_sub[l_idx, "RDB"] / savings_ref_sub[l_idx, "RDB"])
-  #Correction des ménages sans revenus
-  l_idx <- union(which(abs(savings_hor_sub$RDB) < 1000), which(abs(savings_ref_sub$RDB) < 1000))
-  savings_hor_sub[l_idx, "Savings"] <- savings_ref_sub[l_idx, "Savings"]
+
+  # savings_hor_sub <- savings_hor_sub %>%
+  #   mutate(MinGrowthRate =pmin(RDB / savings_ref_sub$RDB, Income / savings_ref_sub$Income, na.rm = T))
+  #
+  # #Correction des MinGrowthRate négatifs (passage d'un RDB >0 à <0 ou l'inverse)
+  # l_idx <- which(savings_hor_sub$MinGrowthRate < 0)
+  # savings_hor_sub$MinGrowthRate[l_idx] <- 1
+  #
+  # #Correction des ménages avec des taux d'épargne hors norme (<-0.5, >0.5)
+  # #Pour ceux là, on applique juste une transformation de l'épargne selon le facteur provenant de la variation des revenus
+  # l_idx <- which(abs(savings_hor_sub$SavingsRate) > 1)
+  # savings_hor_sub[l_idx, "Savings"] <- savings_ref_sub[l_idx, "Savings"] * savings_hor_sub[l_idx, "MinGrowthRate"]
+  # #Correction des Savings = NaN
+  # l_idx <- which(is.nan(savings_hor_sub$Savings))
+  # savings_hor_sub[l_idx, "Savings"] <- savings_ref_sub[l_idx, "Savings"] *
+  #   (savings_hor_sub[l_idx, "RDB"] / savings_ref_sub[l_idx, "RDB"])
+  # #Correction des ménages sans revenus
+  # l_idx <- union(which(abs(savings_hor_sub$RDB) < 1000), which(abs(savings_ref_sub$RDB) < 1000))
+  # savings_hor_sub[l_idx, "Savings"] <- savings_ref_sub[l_idx, "Savings"]
 
 
   #Calcul des taux d'épargne (origine et horizon) en tenant compte de l'ajustement des effets repondératifs
