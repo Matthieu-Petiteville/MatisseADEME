@@ -52,8 +52,8 @@ apply_historical_trend_effect <- function(MatisseData){
 
     spending_var_sub$SpendingSolde <- new_spending_df %>% select(-IDENT_MEN) %>% rowSums()
 
-    spending_var_sub$FC_Spending <- spending_var_sub$FC_Spending * (1/(Nb_iter + 5 )) *
-          (Nb_iter + 5 * spending_var_sub$SpendingHor/ spending_var_sub$SpendingSolde)
+    spending_var_sub$FC_Spending <- spending_var_sub$FC_Spending * (1/(Nb_iter + 11 )) *
+          (Nb_iter + 11 * spending_var_sub$SpendingHor/ spending_var_sub$SpendingSolde)
 
     ecart_iter <- (spending_var_sub$SpendingHor  - spending_var_sub$SpendingSolde) / spending_var_sub$SpendingHor
     men_elast_sub$IPStone <- men_elast_sub$NewIPStone
@@ -63,6 +63,13 @@ apply_historical_trend_effect <- function(MatisseData){
     cat("Iter :",Nb_iter ,"|Ecart", max(abs(ecart_iter), na.rm = TRUE), "\n")
 
 
+  }
+
+  #Correction des quelques résidus (écarts entre données estimées et spending solde)
+  col_vec <- colnames(new_spending_df %>% select(-IDENT_MEN))
+  adjust_fact_vec <- spending_var_sub$SpendingHor / spending_var_sub$SpendingSolde
+  for(col_it in col_vec){
+    new_spending_df[[col_it]] <- new_spending_df[[col_it]] *  adjust_fact_vec
   }
 
   return(new_spending_df)
