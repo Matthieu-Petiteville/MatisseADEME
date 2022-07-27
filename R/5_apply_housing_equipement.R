@@ -24,13 +24,7 @@ apply_housing_equipement <- function(MatisseData){
   dom_conso_proj_sub <- MatisseData$dom_conso_proj
 
   #Correction des données de la table DPE avec les données de consommation à l'horizon
-  ener_sub <- get_ener(MatisseData, year = MatisseParams$year_hor)
   DPE_sub <- MatisseData$DPE
-  # DPE_sub <- DPE_sub %>%
-  #   select(-colnames(ener_sub), IDENT_MEN) %>%
-  #   relocate(IDENT_MEN) %>%
-  #   left_join(ener_sub, by = "IDENT_MEN")
-
   pondmen_sub <- MatisseData$pondmen %>%
     left_join(DPE_sub %>% select(IDENT_MEN, SURFHAB), by = "IDENT_MEN")
   rank_opt <- MatisseADEME:::split_rank_opt(MatisseParams$classement_dom, "_")
@@ -289,8 +283,8 @@ apply_housing_equipement <- function(MatisseData){
 
   #Calcul des effets de changement de DPE
   MatisseData$DPE <- update_DPE(MatisseData, year = "intermed", type = "constr")
-#
-#
+
+
 #   sum(spending_aggr_sub$Elec * pondmen_sub$pond_rew)
 #   sum(MatisseData$spending_aggr$Elec * pondmen_sub$pond_rew)/  sum(spending_aggr_sub$Elec * pondmen_sub$pond_rew)
 #   sum(DPE_ini$Elec * pondmen_sub$pondmen)
@@ -523,7 +517,8 @@ calculate_cost_renov <- function(MatisseData, attribute_renov, year){
   attribute_renov_sub <- attribute_renov
   renov_cost_proj_sub <- MatisseData$renov_cost_proj
   renov_cost_proj_sub <- renov_cost_proj_sub %>%
-    filter(year == all_of(year_sub))
+    filter(year == all_of(year_sub)) %>%
+    distinct()
 
   #Data
   renov_distri_sub <- attribute_renov_sub %>%
@@ -546,7 +541,7 @@ calculate_cost_renov <- function(MatisseData, attribute_renov, year){
   price_renov_cost_sub <- renov_cost_proj_sub %>%
     filter(!is.na(ClassTo)) %>%
     select(Data, Class, ClassTo, value) %>%
-    pivot_wider(id_cols = c(Data, Class, ClassTo), names_from = Data)
+    pivot_wider(id_cols = c(Class, ClassTo), names_from = Data, values_from = value)
   renov_distri_sub <- renov_distri_sub %>%
     left_join(diverse_renov_cost_sub, by = "Class") %>%
     left_join(price_renov_cost_sub, by = c("Class", "ClassTo"))
