@@ -30,10 +30,14 @@ Matisse_Launcher <- function(){
   MatisseData <- Step_3_HistoricalTrends(MatisseData)
 
   # Step 4 : effet transition -------------------------------------------------------------------------------------------------------------------------------
-  MatisseData <- Step_4_TransitionEffects(MatisseData)
+  if(!MatisseParams$transition_last){MatisseData <- Step_4_TransitionEffects(MatisseData)}
 
   # Step 5 : effet equipement -------------------------------------------------------------------------------------------------------------------------------
   MatisseData <- Step_5_EquipementEffects(MatisseData)
+
+  #Case transition last pour tester emplacement de transition
+  if(MatisseParams$transition_last){MatisseData <- Step_4_TransitionEffects(MatisseData)}
+
 
   # Step 6 : add final data -------------------------------------------------------------------------------------------------------------------------------
   MatisseData <- Step_6_FinalData(MatisseData)
@@ -56,7 +60,7 @@ Matisse_Launcher <- function(){
 Step_0_Extract_All_Data <- function(){
 
   #Print
-  cat("====================== Step 0 : Extract All Data ======================\n")
+  cat("====================== Step 0 - ", MatisseParams$scenario," : Extract All Data ======================\n")
 
   #Data SAS
   MatisseData <- get_sas_data(c("menage", "indiv", "depmen", "c05", "automob"))
@@ -124,7 +128,7 @@ Step_0_Extract_All_Data <- function(){
 Step_1_Reweight <- function(MatisseData){
 
   #Print
-  cat("====================== Step 1 : Reweight ======================\n")
+  cat("====================== Step 1 ", MatisseParams$scenario," : Reweight ======================\n")
 
   #Data
   years <- c(MatisseParams$year_ref, MatisseParams$year_hor)
@@ -140,6 +144,13 @@ Step_1_Reweight <- function(MatisseData){
                                       surf_proj = surf_proj,
                                       auto_proj = auto_proj,
                                       constraints = c("TYPMEN5", "ZEAT", "TUU", "VAG", "SURFHAB", "AgeSex", "NbVehic"))
+
+  #Ajout données intermédiaires
+  MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
+    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
+    rename(Elec_Step1 = Elec, Carbu_Step1 = Carbu, Gaz_Step1 = Gaz, Fioul_Step1 = Fioul)
+
+
   return(MatisseData)
 }
 
@@ -158,7 +169,7 @@ Step_1_Reweight <- function(MatisseData){
 Step_2_ProjectMacro <- function(MatisseData){
 
   #Print
-  cat("====================== Step 2 : Project Macro ======================\n")
+  cat("====================== Step 2 ", MatisseParams$scenario," : Project Macro ======================\n")
 
 
   #Revenus
@@ -193,7 +204,7 @@ Step_2_ProjectMacro <- function(MatisseData){
 Step_3_HistoricalTrends <- function(MatisseData){
 
   #Print
-  cat("====================== Step 3 : Historical Trends ======================\n")
+  cat("====================== Step 3 ", MatisseParams$scenario," : Historical Trends ======================\n")
 
   #Switch to econometry spending agregation
   MatisseData$spending_var <- MatisseData$savings %>%
@@ -207,9 +218,11 @@ Step_3_HistoricalTrends <- function(MatisseData){
 
   #Apply effects (elasticities)
   MatisseData$spending_aggr <- apply_historical_trend_effect(MatisseData)
+
+  #Save InterMed data
   MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
-    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu), by ="IDENT_MEN") %>%
-    rename(Elec_Step3 = Elec, Carbu_Step3 = Carbu)
+    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
+    rename(Elec_Step3 = Elec, Carbu_Step3 = Carbu, Gaz_Step3 = Gaz, Fioul_Step3 = Fioul)
 
   return(MatisseData)
 }
@@ -230,10 +243,15 @@ Step_3_HistoricalTrends <- function(MatisseData){
 Step_4_TransitionEffects <- function(MatisseData){
 
   #Print
-  cat("====================== Step 4 : Transition Effects ======================\n")
+  cat("====================== Step 4 ", MatisseParams$scenario," : Transition Effects ======================\n")
 
   #Apply effects
   MatisseData$spending_aggr <- apply_transition_effect (MatisseData)
+
+  #Save InterMed data
+  MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
+    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
+    rename(Elec_Step4 = Elec, Carbu_Step4 = Carbu, Gaz_Step4 = Gaz, Fioul_Step4 = Fioul)
 
   return(MatisseData)
 }
@@ -252,11 +270,24 @@ Step_4_TransitionEffects <- function(MatisseData){
 Step_5_EquipementEffects <- function(MatisseData){
 
   #Print
-  cat("====================== Step 5 : Equipement Effects ======================\n")
+  cat("====================== Step 5 ", MatisseParams$scenario," : Equipement Effects ======================\n")
+
+  #Housing effects
+  MatisseData <- apply_housing_equipement(MatisseData)
+
+  #Save InterMed data
+  MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
+    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
+    rename(Elec_Step5House = Elec, Carbu_Step5House = Carbu, Gaz_Step5House = Gaz, Fioul_Step5House = Fioul)
+
 
   #Transportation effects
-  MatisseData <- apply_housing_equipement(MatisseData)
   MatisseData <- apply_transport_equipement(MatisseData)
+
+  #Save InterMed data
+  MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
+    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
+    rename(Elec_Step5Transport = Elec, Carbu_Step5Transport = Carbu, Gaz_Step5Transport = Gaz, Fioul_Step5Transport = Fioul)
 
   return(MatisseData)
 }
@@ -278,7 +309,7 @@ Step_5_EquipementEffects <- function(MatisseData){
 Step_6_FinalData <- function(MatisseData){
 
   #Print
-  cat("====================== Step 6 : Final Data ======================\n")
+  cat("====================== Step 6 ", MatisseParams$scenario," : Final Data ======================\n")
 
   MatisseData <- transform_final_data(MatisseData)
 
