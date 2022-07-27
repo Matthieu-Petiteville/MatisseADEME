@@ -17,7 +17,7 @@ generate_compare_pdf <- function(MatisseData){
   #Library
   library(gridExtra)
   library(grid)
-  pdf(paste(MatisseFiles$save_folder, "/compare_results.pdf", sep = ""))
+  pdf(paste(MatisseFiles$save_folder, "/compare_results_", MatisseParams$scenario, "_", MatisseParams$year_hor, ".pdf", sep = ""))
 
   #Data
   years = c(MatisseParams$year_ref,MatisseParams$year_hor)
@@ -33,12 +33,18 @@ generate_compare_pdf <- function(MatisseData){
                "BIENIM1", "COEFFUC", "NACTIFS", "NACTOCCUP", "NATIO7PR", "NAUTLOG_MEN", "Niveau", "DNIVIE2","DNIVIE_hor")
   plot_hist_list <- list()
   grid.arrange(textGrob(MatisseParams$year_hor),
+               textGrob(MatisseParams$scenario),
                textGrob("Comparaison sur diverses variables entre \n pondérations initiales et finales"))
 
   for(col_it in histo_colcomp_vec){
-    #TUU menage
-    df_ref <- menage_sub %>% group_by_at(col_it) %>% summarise(count = sum(pondmen * NPERS)) %>% mutate(percent = count/sum(count))
-    df_rew <- menage_sub %>% group_by_at(col_it) %>% summarise(count = sum(pond_rew * NPERS))%>% mutate(percent = count/sum(count))
+    #Données ménages
+    if(col_it %in% c("DNIVIE2", "DNIVIE_hor")){
+      df_ref <- menage_sub %>% group_by_at(col_it) %>% summarise(count = sum(pondmen)) %>% mutate(percent = count/sum(count))
+      df_rew <- menage_sub %>% group_by_at(col_it) %>% summarise(count = sum(pond_rew))%>% mutate(percent = count/sum(count))
+    }else{
+      df_ref <- menage_sub %>% group_by_at(col_it) %>% summarise(count = sum(pondmen * NPERS)) %>% mutate(percent = count/sum(count))
+      df_rew <- menage_sub %>% group_by_at(col_it) %>% summarise(count = sum(pond_rew * NPERS))%>% mutate(percent = count/sum(count))
+    }
 
     plot_df <- df_ref %>% select_at(c(col_it, "percent")) %>% mutate(type = "ref")
     plot_df <- rbind(plot_df, df_rew %>% select_at(c(col_it, "percent")) %>% mutate(type = "rew"))
@@ -263,7 +269,6 @@ generate_compare_pdf <- function(MatisseData){
   fioul_matisse_ref <-  sum((spending_ref_matisse$Fioul) * pondmen_sub$pondmen) / 1000000
   fioul_matisse_hor <-  sum((spending_hor_matisse$Fioul) * pondmen_sub$pond_rew) / 1000000
 
-
   essence_matisse <- tibble(year = years,
                             ConsoEurCour = c(essence_matisse_ref, essence_matisse_hor))
   essence_matisse <- essence_matisse %>%
@@ -385,12 +390,8 @@ generate_compare_pdf <- function(MatisseData){
   DPE <- MatisseData$DPE
   DPE_ini <- MatisseData$DPE_ini
 
-  elec_dom_matisse_ref <- sum(DPE_ini$Elec * pondmen_sub$pondmen) / 1000000
-  elec_dom_matisse_hor <- sum(DPE$Elec * pondmen_sub$pond_rew) / 1000000
   elec_car_matisse_ref <- NA
-  elec_car_matisse_hor <- last(elec_matisse$ConsoEurCour) - elec_dom_matisse_hor
-
-
+  elec_car_matisse_hor <- sum(MatisseData$save_inter_data$Carb2Elec * pondmen_sub$pond_rew) / 1000000
   elec_car_matisse <- elec_matisse %>%
     select(year, IndicePrix) %>%
     mutate(Elec_Car_EurCour = c(elec_car_matisse_ref, elec_car_matisse_hor)) %>%
@@ -408,7 +409,10 @@ generate_compare_pdf <- function(MatisseData){
     mutate(Elec_Dom_EurRef = Elec_Dom_EurCour / IndicePrix * first(IndicePrix)) %>%
     mutate(Elec_DomEur_var = Elec_Dom_EurCour / first(Elec_Dom_EurCour)) %>%
     mutate(Elec_Dom_PhysVar = Elec_Dom_EurRef / first(Elec_Dom_EurRef)) %>%
-    select(-EXP_BUIL_H01_23_2 )
+    select(-EXP_BUIL_H01_23_2)
+
+  elec_dom_matisse_ref <- sum(DPE_ini$Elec * pondmen_sub$pondmen) / 1000000
+  elec_dom_matisse_hor <- elec_matisse_hor - elec_car_matisse_hor
   elec_dom_matisse <- elec_matisse %>%
     select(year, IndicePrix) %>%
     mutate(Elec_Dom_EurCour = c(elec_dom_matisse_ref, elec_dom_matisse_hor)) %>%
@@ -484,7 +488,7 @@ generate_compare_pdf <- function(MatisseData){
     temp_df <- df_list[[df_it]]
     col_names <- remove_item(colnames(temp_df), item = c("Class"))
     for(col_it in col_names){
-      temp_df[[col_it]] <- format(temp_df[[col_it]],digits = 3)
+      temp_df[[col_it]] <- format(temp_df[[col_it]], nsmall = 1, digits = 3, scientific = FALSE)
       grob_list[[paste("Text_", df_it, sep = "")]] <- textGrob(df_it)
       grob_list[[df_it]] <- tableGrob(temp_df, theme = theme_table)
     }
@@ -495,63 +499,66 @@ generate_compare_pdf <- function(MatisseData){
 
 # Consommations -------------------------------------------------------------------------------------------------------------------------------------------
   #Threeme
-  cons_dom_threeme <- get_threeme_data(years = years,
-                                       fields = "^EXP_BUIL_H01_C._2._2$")
-  cons_dom_threeme <- cons_dom_threeme %>%
-    mutate(Var = str_replace(Var, "EXP_BUIL_H01_C","")) %>%
-    mutate(Var = str_replace_all(Var, c("21_2" = "Solide", "22_2" = "Fioul", "23_2" = "Elec", "24_2" = "Gaz"))) %>%
-    separate(Var, into = c("Class", "Ener"), sep = "_", fill = "right") %>%
-    mutate(year = ifelse(year == MatisseParams$year_ref, "Ref", "Hor")) %>%
-    mutate(Ener_year = paste(Ener, year, sep = "_")) %>%
-    select(Class, Ener_year, value) %>%
-    pivot_wider(id_cols = c(Class, Ener_year), names_from = Ener_year)
-  cons_tot_threeme <- cons_dom_threeme %>%
-    select(-Class) %>%
-    colSums(na.rm = T)
-  cons_dom_threeme <- cons_dom_threeme %>%
-    bind_rows(cons_tot_threeme)
-
-  #Matisse
-  price_index_ener <- MatisseData$price_index %>% filter(year == MatisseParams$year_hor)
-  cons_dom_ref_matisse <- DPE_ini %>%
-    left_join(pondmen_sub, by = "IDENT_MEN") %>%
-    group_by(DPE_ini) %>%
-    summarise(Fioul_Ref = sum(Fioul * pondmen) / 1000000,
-              Elec_Ref = sum(Elec * pondmen) / 1000000 ,
-              Gaz_Ref = sum((Gaz + AutreEner) * pondmen) / 1000000,
-              Solide_Ref = sum(Solide * pondmen) / 1000000) %>%
-    rename(Class = DPE_ini)
-  cons_dom_hor_matisse <- DPE %>%
-    left_join(pondmen_sub, by = "IDENT_MEN") %>%
-    group_by(DPE_fin) %>%
-    summarise(Fioul_Hor = sum(Fioul * pond_rew) / 1000000 * price_index_ener$Fioul,
-              Elec_Hor = sum(Elec * pond_rew) / 1000000 * price_index_ener$Elec ,
-              Gaz_Hor = sum((Gaz * price_index_ener$Gaz + AutreEner * price_index_ener$AutreEner) * pond_rew) / 1000000 ,
-              Solide_Hor = sum(Solide * pond_rew) / 1000000 * price_index_ener$Solide)%>%
-    rename(Class = DPE_fin)
-  cons_dom_matisse <- cons_dom_ref_matisse %>%
-
-    left_join(cons_dom_hor_matisse, by = "Class")
-  cons_tot_matisse <- cons_dom_matisse %>%
-    select(-Class) %>%
-    colSums(na.rm = T)
-  cons_dom_matisse <- cons_dom_matisse %>%
-    bind_rows(cons_tot_matisse)
-
-
-  #Format
-  theme_table <- ttheme_default(base_size = 6)
-  df_list <- list(cons_dom_threeme = cons_dom_threeme,
-                  cons_dom_matisse = cons_dom_matisse)
-  grob_list <- list()
-  for(df_it in names(df_list)){
-    temp_df <- df_list[[df_it]]
-    col_names <- remove_item(colnames(temp_df), item = c("year", "Class"))
-    for(col_it in col_names){temp_df[[col_it]] <- format(temp_df[[col_it]],digits = 0)}
-    grob_list[[paste("Text_", df_it, sep = "")]] <- textGrob(df_it)
-    grob_list[[df_it]] <- tableGrob(temp_df, theme = theme_table)
-  }
-  grid.arrange(grobs = grob_list, ncol = 1, heights = c(1,6,1,6))
+  # cons_dom_threeme <- get_threeme_data(years = years,
+  #                                      fields = "^EXP_BUIL_H01_C._2._2$")
+  # cons_dom_threeme <- cons_dom_threeme %>%
+  #   mutate(Var = str_replace(Var, "EXP_BUIL_H01_C","")) %>%
+  #   mutate(Var = str_replace_all(Var, c("21_2" = "Solide", "22_2" = "Fioul", "23_2" = "Elec", "24_2" = "Gaz"))) %>%
+  #   separate(Var, into = c("Class", "Ener"), sep = "_", fill = "right") %>%
+  #   mutate(year = ifelse(year == MatisseParams$year_ref, "Ref", "Hor")) %>%
+  #   mutate(Ener_year = paste(Ener, year, sep = "_")) %>%
+  #   select(Class, Ener_year, value) %>%
+  #   pivot_wider(id_cols = c(Class, Ener_year), names_from = Ener_year)
+  # cons_tot_threeme <- cons_dom_threeme %>%
+  #   select(-Class) %>%
+  #   colSums(na.rm = T)
+  # cons_dom_threeme <- cons_dom_threeme %>%
+  #   bind_rows(cons_tot_threeme)
+  #
+  # #Matisse
+  # price_index_ener <- MatisseData$price_index %>% filter(year == MatisseParams$year_hor)
+  # cons_dom_ref_matisse <- DPE_ini %>%
+  #   left_join(pondmen_sub, by = "IDENT_MEN") %>%
+  #   group_by(DPE_ini) %>%
+  #   summarise(Fioul_Ref = sum(Fioul * pondmen) / 1000000,
+  #             Elec_Ref = sum(Elec * pondmen) / 1000000 ,
+  #             Gaz_Ref = sum((Gaz + AutreEner) * pondmen) / 1000000,
+  #             Solide_Ref = sum(Solide * pondmen) / 1000000) %>%
+  #   rename(Class = DPE_ini)
+  #
+  # cons_dom_hor_matisse <- DPE %>%
+  #   left_join(pondmen_sub, by = "IDENT_MEN") %>%
+  #   group_by(DPE_fin) %>%
+  #   summarise(Fioul_Hor = sum(Fioul * pond_rew) / 1000000 * price_index_ener$Fioul,
+  #             Elec_Hor = sum(Elec * pond_rew) / 1000000 * price_index_ener$Elec ,
+  #             Gaz_Hor = sum((Gaz * price_index_ener$Gaz + AutreEner * price_index_ener$AutreEner) * pond_rew) / 1000000 ,
+  #             Solide_Hor = sum(Solide * pond_rew) / 1000000 * price_index_ener$Solide)%>%
+  #   rename(Class = DPE_fin)
+  # cons_dom_matisse <- cons_dom_ref_matisse %>%
+  #   left_join(cons_dom_hor_matisse, by = "Class") %>%
+  #   select(Class, Elec_Ref, Elec_Hor, Gaz_Ref, Gaz_Hor, Fioul_Ref, Fioul_Hor, Solide_Ref, Solide_Hor)
+  #
+  #
+  # cons_tot_matisse <- cons_dom_matisse %>%
+  #   select(-Class) %>%
+  #   colSums(na.rm = T)
+  # cons_dom_matisse <- cons_dom_matisse %>%
+  #   bind_rows(cons_tot_matisse)
+  #
+  #
+  # #Format
+  # theme_table <- ttheme_default(base_size = 6)
+  # df_list <- list(cons_dom_threeme = cons_dom_threeme,
+  #                 cons_dom_matisse = cons_dom_matisse)
+  # grob_list <- list()
+  # for(df_it in names(df_list)){
+  #   temp_df <- df_list[[df_it]]
+  #   col_names <- remove_item(colnames(temp_df), item = c("year", "Class"))
+  #   for(col_it in col_names){temp_df[[col_it]] <- num(temp_df[[col_it]], digits = -1, notation = "dec")}
+  #   grob_list[[paste("Text_", df_it, sep = "")]] <- textGrob(df_it)
+  #   grob_list[[df_it]] <- tableGrob(temp_df, theme = theme_table)
+  # }
+  # grid.arrange(grobs = grob_list, ncol = 1, heights = c(1,6,1,6))
 
 
 # Car parc ------------------------------------------------------------------------------------------------------------------------------------------------
