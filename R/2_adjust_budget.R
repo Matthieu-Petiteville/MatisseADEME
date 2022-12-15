@@ -18,9 +18,19 @@ project_incomes <- function(MatisseData, inc_proj){
   #Local
   pondmen_sub <- MatisseData$pondmen
   income_sub <- MatisseData$income
+  menage_sub <- MatisseData$menage
 
   #Mise à l'échelle des revenus
   rev_vec <- unique(colnames(income_sub %>% select(-IDENT_MEN)))
+  rev_vec <- c(rev_vec, "Rev_TaxeCarbone")
+
+  #Cas des changements de distribution des revenus
+  if(length(MatisseParams$rev_dec_vector) == length(unique(menage_sub$DNIVIE2))){
+    cat("-- Using revenue adjustment vector to distribute revenue gains --")
+    rev_dec_vec <- MatisseParams$rev_dec_vector
+    rev_dec_vec <- rev_dec_vec/sum(rev_dec_vec) * 10
+  }
+
   for(rev_it in rev_vec){
     if(rev_it != "Rev_TaxeCarbone"){
       #Calcul des sommes numéraires avant et après repondération (effet démographie)
@@ -35,9 +45,32 @@ project_incomes <- function(MatisseData, inc_proj){
 
       cat("Revenu :", rev_it,"| Target :", fc_ref_horiz, "| FC_ref_rew :",  fc_ref_rew, "| FC_rew_horiz :",fc_rew_horiz, "\n", sep =" " )
 
-      #Ajustement des revenus
-      income_sub[[rev_it]] <- income_sub[[rev_it]] * fc_rew_horiz
-      income_sub[[rev_it]]  <- replace_na(income_sub[[rev_it]], 0)
+      if(length(MatisseParams$rev_dec_vector)!=length(unique(menage_sub$DNIVIE2))){
+        #Ajustement des revenus
+        income_sub[[rev_it]] <- income_sub[[rev_it]] * fc_rew_horiz
+        income_sub[[rev_it]]  <- replace_na(income_sub[[rev_it]], 0)
+      }else{
+        fc_rew_iter <- fc_rew_horiz
+        rev_adj_vec <- rev_dec_vec[menage_sub$DNIVIE2]
+        has_converged <- F
+        count_it <- 1
+        while(!has_converged && count_it <100){
+          rev_adjust_factor_vec <- (rev_adj_vec * (fc_rew_iter - 1)) + 1
+          income_temp_sub <- income_sub[[rev_it]] * rev_adjust_factor_vec
+          sum_men_iter <- sum(pondmen_sub$pond_rew * income_temp_sub)
+          fc_res_iter <- sum_men_iter / sum_men_ref
+          fc_rew_iter <- fc_rew_iter * fc_rew_horiz / fc_res_iter
+          cat(fc_rew_iter, "\n")
+          count_it <- count_it +1
+          if(abs(fc_res_iter / fc_rew_horiz - 1) < 0.00001){has_converged <- T}
+        }
+
+        income_sub[[rev_it]] <- income_sub[[rev_it]] * rev_adjust_factor_vec
+        income_sub[[rev_it]]  <- replace_na(income_sub[[rev_it]], 0)
+
+      }
+
+
     }else{
       #Calcul de la part attribuée par ménage (distribution équitable)
       value_tco_hor <- inc_proj %>%
@@ -95,20 +128,20 @@ project_taxes <- function(MatisseData, tax_proj){
   }
 
   #Ajout crédit d'impôt TC
-  pop_threeme <- get_threeme_data(years = c(MatisseParams$year_ref, MatisseParams$year_hor),
-                                  fields = "^POP_TOT$")
-  pop_threeme <- pop_threeme %>%
-    rename(type = Var) %>%
-    relocate(type, year, value)
-  tc_per_pop_hor <- tax_proj %>%
-    filter(type == "Retro_TaxeCarbone") %>%
-    rbind(pop_threeme) %>%
-    pivot_wider(id_cols = c(type, year), names_from = type) %>%
-    mutate(TC_per_pop = Retro_TaxeCarbone / POP_TOT * 1000) %>%
-    filter(year == MatisseParams$year_hor) %>%
-    pull(TC_per_pop)
-  taxes_sub$Retro_TC <- -1 * tc_per_pop_hor * menage_sub$NPERS
-  cat("Retro TC : ", tc_per_pop_hor, "per pop\n", sep = " ")
+  # pop_threeme <- get_threeme_data(years = c(MatisseParams$year_ref, MatisseParams$year_hor),
+  #                                 fields = "^POP_TOT$")
+  # pop_threeme <- pop_threeme %>%
+  #   rename(type = Var) %>%
+  #   relocate(type, year, value)
+  # tc_per_pop_hor <- tax_proj %>%
+  #   filter(type == "Retro_TaxeCarbone") %>%
+  #   rbind(pop_threeme) %>%
+  #   pivot_wider(id_cols = year, names_from = type) %>%
+  #   mutate(TC_per_pop = Retro_TaxeCarbone / POP_TOT * 1000) %>%
+  #   filter(year == MatisseParams$year_hor) %>%
+  #   pull(TC_per_pop)
+  # taxes_sub$Retro_TC <- -1 * tc_per_pop_hor * menage_sub$NPERS
+  # cat("Retro TC : ", tc_per_pop_hor, "per pop\n", sep = " ")
 
   return(taxes_sub)
 }
@@ -127,7 +160,7 @@ project_taxes <- function(MatisseData, tax_proj){
 #' @export
 #'
 #' @examples
-#'
+#' project_savings(MatisseData, sav_proj)
 project_savings <- function(MatisseData, sav_proj){
 
   #Data
@@ -149,12 +182,12 @@ project_savings <- function(MatisseData, sav_proj){
   #Première approximation de l'épargne : les dépenses croissent au rythme de variation des revenus
   savings_hor_sub <- savings_hor_sub %>%
     mutate(IncomeGrowthRate =  Income / savings_ref_sub$Income) %>%
+    mutate(IncomeGrowthRate = if_else(IncomeGrowthRate == Inf, NA_real_, IncomeGrowthRate)) %>%
+    mutate(IncomeGrowthRate = if_else(IncomeGrowthRate > 2 * mean(IncomeGrowthRate, na.rm = T) | IncomeGrowthRate < 0.5 * mean(IncomeGrowthRate, na.rm = T), NA_real_, IncomeGrowthRate)) %>%
     mutate(IncomeGrowthRate = replace_na(IncomeGrowthRate, mean(IncomeGrowthRate, na.rm = T))) %>%
     mutate(Spending = savings_ref_sub$Spending * IncomeGrowthRate) %>%
     mutate(Durable = savings_ref_sub$Durable * IncomeGrowthRate) %>%
     mutate(Savings = Income - Taxes - Spending - Durable)
-
-
 
   # savings_hor_sub <- savings_hor_sub %>%
   #   mutate(MinGrowthRate =pmin(RDB / savings_ref_sub$RDB, Income / savings_ref_sub$Income, na.rm = T))
