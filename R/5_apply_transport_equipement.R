@@ -26,6 +26,8 @@ apply_transport_equipement <- function(MatisseData){
   automob_sub <- automob_sub %>%
     left_join(pondmen_sub %>% select(IDENT_MEN, pond_rew), by = "IDENT_MEN")
   nb_car_tot <- sum(automob_sub %>% filter(is_active) %>% pull(pond_rew))
+  MatisseData$NewVTEfficiency <- tibble(year = (MatisseParams$year_ref + 1):(MatisseParams$year_hor),
+                                        EfficiencyReplacement = 0)
 
   #Extraction des gains de performance moyenne par km
   MatisseData$VT_efficiency <- MatisseADEME:::get_VT_efficiency(MatisseData)
@@ -73,7 +75,6 @@ apply_transport_equipement <- function(MatisseData){
       select(-rank)
 
     #Selection des ménages changeant leur VT pour un VE
-    #Classement des ménages par âge des véhicules électriques : on renouvelle d'abord les véhicules anciens
     rank_df <- MatisseADEME:::get_ranking_transport(MatisseData, type = rank_opt[["type"]], dec_inc = rank_opt[["dec_inc"]])
     attribute_new_car <- attribute_new_car %>%
       left_join(rank_df, by = "IDENT_MEN") %>%
@@ -89,7 +90,6 @@ apply_transport_equipement <- function(MatisseData){
 
 
     #Selection des ménages changeant leur VT pour un VT
-    #Classement des ménages par consommation de carburant sauf ménages ayant acheté un VE
     rank_df <- MatisseADEME:::get_ranking_transport(MatisseData, type = rank_opt[["type"]], dec_inc = rank_opt[["dec_inc"]])
     attribute_new_car <- attribute_new_car %>%
       left_join(rank_df, by = "IDENT_MEN") %>%
@@ -120,9 +120,9 @@ apply_transport_equipement <- function(MatisseData){
 
   }
 
-  Elec_conso <- MatisseData$spending_aggr$Elec
+  # Elec_conso <- MatisseData$spending_aggr$Elec
   MatisseData$spending_aggr <- MatisseADEME:::modify_budget_transport_equipement(MatisseData)
-  MatisseData$save_inter_data$Carb2Elec <- MatisseData$spending_aggr$Elec - Elec_conso
+  # MatisseData$save_inter_data$Carb2Elec <- MatisseData$spending_aggr$Elec - Elec_conso
 
   return(MatisseData)
 }
@@ -130,7 +130,7 @@ apply_transport_equipement <- function(MatisseData){
 
 # get_ranking_transport -----------------------------------------------------------------------------------------------------------------------------------
 #' @title get_ranking_transport
-#' @description
+#' @description A function to rank households between them to attribute new vehicles
 #'
 #' @param MatisseData A MatisseData list of all the data from Matisse
 #' @param type A string for the ranking metric. Defaults at 'Cost'
@@ -138,17 +138,20 @@ apply_transport_equipement <- function(MatisseData){
 #' 'Cost' uses the monetary spending in transport fuel
 #' @param dec_inc A string (valid dec or inc) indicating if the type should be ordered increasingly or decreasingly.
 #' In the natural process, low ranking will be favored for selection. Thus a 'Cost dec' type + dec_inc will
-#' result in the higher monetary spending be favored.
+#' result in the higher monetary spending be favored. RDB for ranking on RDB
 #'
-#' @return
+#' @return A ranking tibble for transport ranking
 #'
 #' @examples
 #' get_ranking_transport(MatisseData, type = "Cost", dec_inc = "dec")
 get_ranking_transport <- function(MatisseData, type = "Cost", dec_inc = "dec"){
 
   #Data
+  menage_sub <- MatisseData$menage
   vehic_sub <- MatisseData$vehic
   parc_auto_sub <- MatisseData$parc_auto
+  savings_sub <- MatisseData$savings_hor
+  if(!(type %in% c("Cost", "AnVoiEle", "Random", "RDB", "CostPerCar"))){stop("Invalid type params. Accepted values are Cost, AnVoiEle, Random, RDB")}
   if(!(dec_inc %in% c("dec", "inc"))){stop("Invalid dec_inc params. Accepted values are dec or inc")}
 
 
@@ -157,11 +160,20 @@ get_ranking_transport <- function(MatisseData, type = "Cost", dec_inc = "dec"){
   if(type == "Cost"){
     rank_df$metric <- vehic_sub$DepCarb_temp
   }
+  if(type == "CostPerCar"){
+    rank_df$metric <- replace_nan(vehic_sub$DepCarb_temp / (parc_auto_sub$NbVehic_Ess + parc_auto_sub$NbVehic_Die + parc_auto_sub$NbVehic_GPL), NA)
+  }
   if(type == "AnVoiEle" & dec_inc == "inc"){
     rank_df$metric <- parc_auto_sub$Anvoi_min_elec
   }
   if(type == "AnVoiEle" & dec_inc == "dec"){
     rank_df$metric <- parc_auto_sub$Anvoi_max_elec
+  }
+  if(type == "Random"){
+    rank_df$metric <- 1:nrow(rank_df)
+  }
+  if(type == "RDB"){
+    rank_df$metric <- savings_sub$RDB / menage_sub$COEFFUC
   }
 
   #Ranking
@@ -230,7 +242,7 @@ is_eligible_new_VE <- function(MatisseData, year){
     mutate(is_elig_VE_rep_VE =
              has_elec_car &
              (elec_car_older_than_15 |
-             year_horizon_check) %>% structure(label = "True si ménage disponible pour un VE en remplacement de VT" ))
+             year_horizon_check) %>% structure(label = "True si ménage disponible pour un VE en remplacement de VE" ))
 
   #Conservation des colonnes d'intérêt : is_elig
   elig_new_VE <- elig_new_VE %>%
@@ -297,18 +309,21 @@ is_eligible_new_VT <- function(MatisseData, year){
 #' @param MatisseData A MatisseData list of all the data from Matisse
 #' @param attribute_new_car
 #'
-#' @return
+#' @return A transformed MatisseData with new car inclusion
 #' @export
 #'
 #' @examples
+#' apply_newcar_transformation(MatisseData, attribute_new_car, year)
 apply_newcar_transformation <- function(MatisseData, attribute_new_car, year){
 
   #Data
   automob_sub <- MatisseData$automob
   vehic_sub <- MatisseData$vehic
   parc_auto_sub <- MatisseData$parc_auto
-  VT_eff_sub <- MatisseData$VT_efficiency %>%
-    rename(year_col = year)
+  auto_proj_sub <- MatisseData$auto_proj %>% rename(year_col = year)
+  VT_eff_sub <- MatisseData$VT_efficiency %>% rename(year_col = year)
+  auto_conso_sub <- MatisseData$auto_conso_proj %>% rename(year_col = year)
+  newauto_th_conso_sub <- MatisseData$newauto_th_conso %>% rename(year_col = year)
 
   #Table d'ajustement des consommations VT -> VE
   auto_conso_proj_sub <- MatisseData$auto_conso_proj
@@ -375,6 +390,19 @@ apply_newcar_transformation <- function(MatisseData, attribute_new_car, year){
     }
   }
 
+  #Calcul de l'efficacité des nouveaux moteurs thermiques par rapport aux anciens
+  if(MatisseParams$vt_eff_calc == "new"){
+    eff_parc_histo <- auto_conso_sub %>%
+      filter(year_col == year - 1, AutoEner == "Thermic") %>%
+      pull(ConsoPerKm_Ekm)
+    eff_newveh <- newauto_th_conso_sub  %>%
+      filter(year_col == year) %>%
+      pull(AverageNewConso)
+    NewVT_eff <- eff_newveh / eff_parc_histo
+  }else{
+      NewVT_eff <- VT_eff_sub %>% filter(year_col == year) %>% pull(value)
+  }
+
   #VT remplace VT
   id_rep_VT <- attribute_new_car %>% filter(VT_rep_VT) %>% pull(IDENT_MEN)
   if(length(id_rep_VT) > 0){
@@ -394,8 +422,7 @@ apply_newcar_transformation <- function(MatisseData, attribute_new_car, year){
       #Transformation de DepCarb_temp, la colonne qui conserve les données de dépenses carburant
       #On suppose une répartition équivalente des dépenses dans tous les véhicules et on retire les gains d'efficacité
       men_idx <- which(vehic_sub$IDENT_MEN == id_rep_VT_it)
-      ratio_VT_eff <- VT_eff_sub %>% filter(year_col == year) %>% pull(value)
-      vehic_sub$DepCarb_temp[men_idx] <- vehic_sub$DepCarb_temp[men_idx] * (1 - 1 / vehic_sub$NbVehic_Foss[men_idx] * (1 - ratio_VT_eff))
+      vehic_sub$DepCarb_temp[men_idx] <- vehic_sub$DepCarb_temp[men_idx] * (1 - 1 / vehic_sub$NbVehic_Foss[men_idx] * (1 - NewVT_eff))
     }
   }
 
@@ -403,6 +430,7 @@ apply_newcar_transformation <- function(MatisseData, attribute_new_car, year){
   vehic_sub <- vehic_sub %>% select(-c(NbVehic_Foss, NbVehic_Ele))
 
   #On renvoie les données
+  MatisseData$NewVTEfficiency$EfficiencyReplacement[which(MatisseData$NewVTEfficiency$year == year)] <- NewVT_eff
   MatisseData$automob <- automob_sub
   MatisseData$vehic <- vehic_sub
   return(MatisseData)
@@ -451,7 +479,7 @@ get_car_to_replace <- function(automob, FuelType, IdMen){
 #' @param carbu_type The type of fuel (Ele or Ess)
 #' @param year The year of the new car
 #'
-#' @return
+#' @return A transformed automob tibble
 #'
 #' @examples
 #' add_new_car(automob, old_car, rep_type, year)
@@ -499,7 +527,7 @@ modify_budget_transport_equipement <- function(MatisseData){
   auto_conso_proj_sub <- MatisseData$auto_conso_proj
   auto_conso_proj_sub <- auto_conso_proj_sub %>%
     select(year, AutoEner, ConsoPerKm_Ekm) %>%
-    pivot_wider(id_cols = c(year, AutoEner), names_from = AutoEner, values_from = ConsoPerKm_Ekm) %>%
+    pivot_wider(id_cols = year, names_from = AutoEner, values_from = ConsoPerKm_Ekm) %>%
     mutate(RatioVT2VE = Elec / Thermic)
 
 
@@ -521,7 +549,7 @@ modify_budget_transport_equipement <- function(MatisseData){
   spending_trans_df[[sect_fuel]] <- replace_na(spending_trans_df[[sect_fuel]] * vehic_sub$DepCarb_Ratio, 0)
 
   #Ajout de la consommation en électricité
-  sect_elec <- transco_sect_sub %>% filter(LibelleMatisseAggr == "Electricite") %>% pull(MatisseAggr)
+  sect_elec <- transco_sect_sub %>% filter(LibelleMatisseAggr == "Elec Vehicule") %>% pull(MatisseAggr)
   elec_price_index <- as.numeric(price_index_hor_df$Elec)
   # spending_trans_df[[sect_elec]] <- spending_trans_df[[sect_elec]] + (init_budg_fuel - spending_trans_df[[sect_fuel]]) * ratio_cost_elec_foss
   spending_trans_df[[sect_elec]] <- spending_trans_df[[sect_elec]] +
@@ -540,34 +568,18 @@ modify_budget_transport_equipement <- function(MatisseData){
                                   price_index_hor_df =  price_index_hor_df,
                                   floor_at_z = T)
 
-
-  # test <- sum(spending_new[[sect_elec]] * pondmen_sub$pond_rew)
-
-
-
-
-  cat("Conso totale Carb init\n")
-  cat(sum(MatisseData$pondmen$pond_rew * spending_aggr_sub$Carbu), "\n")
-  cat("Conso totale Carb fin\n")
-  cat(sum(MatisseData$pondmen$pond_rew * spending_new$Carbu), "\n")
-
-  cat("Conso totale Elec init\n")
-  cat(sum(MatisseData$pondmen$pond_rew * spending_aggr_sub$Elec), "\n")
-  cat("Conso totale Elec fin\n")
-  cat(sum(MatisseData$pondmen$pond_rew * spending_new$Elec), "\n")
-
   return(spending_new)
-
 }
 
 
+# get_VT_efficiency ---------------------------------------------------------------------------------------------------------------------------------------
 #' @title get_VT_efficiency
 #' @description Returns a tibble with the evolution of average consumption for VT, which is then used to adjust
 #' fuel consumption for VT on change of equipment
 #'
 #' @param years
 #'
-#' @return
+#' @return A tibble of values for VT efficiency
 #'
 #' @examples
 #' get_VT_efficiency(MatisseParams$year_ref:MatisseParams$year_hor)
