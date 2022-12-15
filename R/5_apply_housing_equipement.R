@@ -231,6 +231,7 @@ apply_housing_equipement <- function(MatisseData){
     left_join(rank_df %>% select(-SURFHAB), by = "IDENT_MEN") %>%
     mutate(rank_fix = ifelse(is_elig_constr, rank, Inf)) %>%
     mutate(DPE_from = DPE_fin, DPE_to = NA) %>%
+    mutate(has_bought = F) %>%
     select(-DPE_fin) %>%
     arrange(rank_fix)
 
@@ -246,13 +247,14 @@ apply_housing_equipement <- function(MatisseData){
           #Filtre sur les DPE avant attribution en excluant les rénovation déjà attribuées
           mutate(cumsum_surf = cumsum(pond_rew * SURFHAB)) %>%
           mutate(is_OK_constr =  cumsum_surf <= max(all_of(m2_target), first(cumsum_surf))) %>%
-          filter(is_OK_constr & is_elig_constr) %>%
+          filter(is_OK_constr & is_elig_constr & !has_bought) %>%
           mutate(DPE_to = DPE_to_it)
 
           #Ajout des constructions attribuées
           ident_vec <- temp_attrib_constr_sub %>% pull(IDENT_MEN)
           l_idx <- which(attrib_constr_sub$IDENT_MEN %in% ident_vec)
           attrib_constr_sub$DPE_to[l_idx] <- DPE_to_it
+          attrib_constr_sub$has_bought[l_idx] <- T
 
         MatisseData$constr_distri <- MatisseData$constr_distri %>%
           bind_rows(temp_attrib_constr_sub %>% select(IDENT_MEN, DPE_to) %>% mutate(year = "intermed"))
@@ -427,9 +429,10 @@ is_eligible_constr <- function(MatisseData, is_horizon = FALSE){
 #'
 #' @param dec_inc A string (valid dec or inc) indicating if the type should be ordered increasingly or decreasingly.
 #' In the natural process, low ranking will be favored for selection. Thus a 'Cost dec' type + dec_inc will
-#' result in the higher monetary spending be favored.
+#' result in the higher monetary spending be favored."Random" uses the default ranking of household (the line number of each)
+#' to generate a pseudorandom but deterministic allocation of tech change.
 #'
-#' @return
+#' @return A ranking tibble
 #'
 #' @examples
 #' get_ranking_build(MatisseData, type = "Cost", dec_inc = "dec")
@@ -439,8 +442,9 @@ get_ranking_build <- function(MatisseData, type = "Cost", dec_inc = "dec"){
   menage_sub <- MatisseData$menage
   depmen_sub <- MatisseData$depmen
   DPE_sub <- MatisseData$DPE
+  savings_sub <- MatisseData$savings_hor
 
-  if(!(type %in% c("Cost", "Ener", "ConsoSurf", "Fossile"))){stop("Invalid type params. Accepted values are Cost, Ener, ConsoSurf, Fossile")}
+  if(!(type %in% c("Cost", "Ener", "ConsoSurf", "Fossile", "Random", "RDB"))){stop("Invalid type params. Accepted values are Cost, Ener, ConsoSurf, Fossile, Random, RDB")}
   if(!(dec_inc %in% c("dec", "inc"))){stop("Invalid dec_inc params. Accepted values are dec or inc")}
 
   #Classement
@@ -463,6 +467,13 @@ get_ranking_build <- function(MatisseData, type = "Cost", dec_inc = "dec"){
   if(type == "Fossile"){
     rank_df$metric <- rank_df$Fioul_kWh + rank_df$Gaz_kWh + rank_df$Solide_kWh
   }
+  if(type == "Random"){
+    rank_df$metric <- 1:nrow(rank_df)
+  }
+  if(type == "RDB"){
+    rank_df$metric <- savings_sub$RDB / menage_sub$COEFFUC
+  }
+
 
   #Ranking : aggregation par classe/StalogPropri, puis classement puis ajustement des rangs
   #pour classer les StalogsPropris
@@ -537,7 +548,7 @@ calculate_cost_renov <- function(MatisseData, attribute_renov, year){
   diverse_renov_cost_sub <- renov_cost_proj_sub %>%
     filter(is.na(ClassTo)) %>%
     select(Data, Class, value) %>%
-    pivot_wider(id_cols = c(Data, Class), names_from = Data)
+    pivot_wider(id_cols = Class, names_from = Data)
   price_renov_cost_sub <- renov_cost_proj_sub %>%
     filter(!is.na(ClassTo)) %>%
     select(Data, Class, ClassTo, value) %>%
@@ -553,14 +564,10 @@ calculate_cost_renov <- function(MatisseData, attribute_renov, year){
 
   #Ajout des données de coût de prêt
   l_idx <- which(renov_distri_sub$is_renovating)
-  for(cpt_it in l_idx){
-    loan_data <- amort.period(Loan = renov_distri_sub$Cost_renov[cpt_it] * renov_distri_sub$ShareViaLoan[cpt_it],
-                             n = renov_distri_sub$LoanDuration[cpt_it],
-                             i = renov_distri_sub$LoanRate[cpt_it])
-    renov_distri_sub$Loan_cost[cpt_it] <- as_tibble(t(loan_data)) %>% pull(PMT)
-  }
-  renov_distri_sub <- renov_distri_sub %>%
-    rename(DPE_from = Class, DPE_to = ClassTo)
+  payment_one <- amort.period(Loan = 1, n = renov_distri_sub$LoanDuration[1], i = renov_distri_sub$LoanRate[1])
+  payment_one <- as_tibble(t(payment_one)) %>% pull(PMT)
+  renov_distri_sub$Loan_cost[l_idx] <- payment_one * renov_distri_sub$Cost_renov[l_idx] * renov_distri_sub$ShareViaLoan[l_idx]
+  renov_distri_sub <- renov_distri_sub %>% rename(DPE_from = Class, DPE_to = ClassTo)
 
   #Return
   renov_distri_sub <- renov_distri_sub %>%
@@ -593,15 +600,15 @@ update_DPE <- function(MatisseData, year, type = "renov"){
   year_sub <- year
   DPE_sub <- MatisseData$DPE
   if(type == "renov"){
-    renov_distri_sub <- MatisseData$renov_distri
-    renov_distri_sub <- renov_distri_sub %>%
+    dpe_update_sub <- MatisseData$renov_distri
+    dpe_update_sub <- dpe_update_sub %>%
       filter(is_renovating, year == all_of(year_sub))
   }else if(type == "constr"){
-    constr_distri_sub <- MatisseData$constr_distri
-    constr_distri_sub <- constr_distri_sub %>%
+    dpe_update_sub <- MatisseData$constr_distri %>%
       filter(year == year_sub) %>%
       left_join(DPE_sub %>%
-                  select(IDENT_MEN, DPE_ini), by = "IDENT_MEN")
+      select(IDENT_MEN, DPE_ini), by = "IDENT_MEN") %>%
+      rename(DPE_from = DPE_ini)
   }else{
     stop("Invalid type for function update_DPE")
   }
@@ -616,65 +623,76 @@ update_DPE <- function(MatisseData, year, type = "renov"){
     distinct()
   ener_vec <- unique(transco_sect_sub$MatisseAggr)
   dom_conso_proj_sub <- dom_conso_proj_sub %>%
-    filter(year == MatisseParams$year_ref)
+    filter(year == MatisseParams$year_ref) %>%
+    mutate(DPE_from = DPE) %>%
+    mutate(DPE_to = DPE)
+
+  if(type %in% c("renov", "constr")){
 
   #Application des effets aux ménages rénovants
-  if(type == "renov"){
-    for(cpt_it in 1:nrow(renov_distri_sub)){
-      ident_it <- which(DPE_sub$IDENT_MEN == renov_distri_sub$IDENT_MEN[cpt_it])
-      temp_dom_conso_sub <- dom_conso_proj_sub %>%
-        filter(DPE %in% c(renov_distri_sub$DPE_from[cpt_it], renov_distri_sub$DPE_to[cpt_it]))
-
-      for(ener_it in 1:nrow(transco_sect_sub)){
-        conso_from <- dom_conso_proj_sub %>%
-          filter(Ener == transco_sect_sub$ThreeMe[ener_it], DPE == renov_distri_sub$DPE_from[cpt_it]) %>%
-          pull(kWh_m2)
-        conso_to <- dom_conso_proj_sub %>%
-          filter(Ener == transco_sect_sub$ThreeMe[ener_it], DPE == renov_distri_sub$DPE_to[cpt_it]) %>%
-          pull(kWh_m2)
-        if(length(conso_to) == 0){
-          ratio_conso <- 0
-        }else{
-          ratio_conso <- conso_to / conso_from
-        }
-
-        col_fil <- str_subset(colnames(DPE_sub), transco_sect_sub$MatisseAggr[ener_it])
-        DPE_sub[ident_it, col_fil] <- DPE_sub[ident_it, col_fil] * ratio_conso
-
-      }
-      DPE_sub$DPE_fin[ident_it] <- renov_distri_sub$DPE_to[cpt_it]
-      DPE_sub$year_build[ident_it] <- year_sub
+    ident_it <- which(DPE_sub$IDENT_MEN %in% dpe_update_sub$IDENT_MEN)
+    from_renov_distri <- dpe_update_sub %>%
+      select(IDENT_MEN, DPE_from, DPE_to)
+    to_renov_distri <- from_renov_distri
+    for(ener_it in sort(unique(dom_conso_proj_sub$Ener))){
+      reduc_dom_conso <- dom_conso_proj_sub %>%
+        filter(Ener == ener_it) %>%
+        select(DPE, DPE_from, DPE_to, kWh_m2)
+      #Données from
+      from_renov_distri <- from_renov_distri %>%
+        left_join(reduc_dom_conso %>% select(DPE_from, kWh_m2), by = "DPE_from")
+      from_renov_distri[[ener_it]] <- from_renov_distri$kWh_m2
+      from_renov_distri <- from_renov_distri %>% select(-kWh_m2)
+      #Données to
+      to_renov_distri <- to_renov_distri %>%
+        left_join(reduc_dom_conso %>% select(DPE_to, kWh_m2), by = "DPE_to")
+      to_renov_distri[[ener_it]] <- to_renov_distri$kWh_m2
+      to_renov_distri <- to_renov_distri %>% select(-kWh_m2)
     }
-  }
-
-  #Application des effets aux ménages construisant
-  if(type == "constr"){
-    for(cpt_it in seq_len(nrow(constr_distri_sub))){
-      ident_it <- which(DPE_sub$IDENT_MEN == constr_distri_sub$IDENT_MEN[cpt_it])
-      temp_dom_conso_sub <- dom_conso_proj_sub %>%
-        filter(DPE %in% c(constr_distri_sub$DPE_ini[cpt_it], constr_distri_sub$DPE_to[cpt_it]))
-
-      for(ener_it in seq_len(nrow(transco_sect_sub))){
-        conso_from <- dom_conso_proj_sub %>%
-          filter(Ener == transco_sect_sub$ThreeMe[ener_it], DPE == constr_distri_sub$DPE_ini[cpt_it]) %>%
-          pull(kWh_m2)
-        conso_to <- dom_conso_proj_sub %>%
-          filter(Ener == transco_sect_sub$ThreeMe[ener_it], DPE == constr_distri_sub$DPE_to[cpt_it]) %>%
-          pull(kWh_m2)
-        if(length(conso_to) == 0){
-          ratio_conso <- 0
-        }else{
-          ratio_conso <- conso_to / conso_from
-        }
-
-        col_fil <- str_subset(colnames(DPE_sub), transco_sect_sub$MatisseAggr[ener_it])
-        DPE_sub[ident_it, col_fil] <- DPE_sub[ident_it, col_fil] * ratio_conso
-
-      }
-      DPE_sub$DPE_fin[ident_it] <- constr_distri_sub$DPE_to[cpt_it]
-      DPE_sub$year_build[ident_it] <- year_sub
+    ratio_renov <- dpe_update_sub %>%
+      select(IDENT_MEN, DPE_from, DPE_to)
+    for(ener_it in sort(unique(dom_conso_proj_sub$Ener))){
+      ratio_renov[[ener_it]] <- replace_na(to_renov_distri[[ener_it]] / from_renov_distri[[ener_it]], 0)
     }
+    for(ener_it in 1:nrow(transco_sect_sub)){
+      col_fil <- str_subset(colnames(DPE_sub), transco_sect_sub$MatisseAggr[ener_it])
+      for(col_it in col_fil){
+        DPE_sub[ident_it, col_it] <- DPE_sub[ident_it, col_it] * ratio_renov[transco_sect_sub$ThreeMe[ener_it]]
+      }
+    }
+    DPE_sub$DPE_fin[ident_it] <- dpe_update_sub$DPE_to
+    DPE_sub$year_build[ident_it] <- year_sub
   }
+#
+#
+#   #Application des effets aux ménages construisant
+#   if(type == "constr"){
+#     for(cpt_it in seq_len(nrow(constr_distri_sub))){
+#       ident_it <- which(DPE_sub$IDENT_MEN == constr_distri_sub$IDENT_MEN[cpt_it])
+#       temp_dom_conso_sub <- dom_conso_proj_sub %>%
+#         filter(DPE %in% c(constr_distri_sub$DPE_ini[cpt_it], constr_distri_sub$DPE_to[cpt_it]))
+#
+#       for(ener_it in seq_len(nrow(transco_sect_sub))){
+#         conso_from <- dom_conso_proj_sub %>%
+#           filter(Ener == transco_sect_sub$ThreeMe[ener_it], DPE == constr_distri_sub$DPE_ini[cpt_it]) %>%
+#           pull(kWh_m2)
+#         conso_to <- dom_conso_proj_sub %>%
+#           filter(Ener == transco_sect_sub$ThreeMe[ener_it], DPE == constr_distri_sub$DPE_to[cpt_it]) %>%
+#           pull(kWh_m2)
+#         if(length(conso_to) == 0){
+#           ratio_conso <- 0
+#         }else{
+#           ratio_conso <- conso_to / conso_from
+#         }
+#
+#         col_fil <- str_subset(colnames(DPE_sub), transco_sect_sub$MatisseAggr[ener_it])
+#         DPE_sub[ident_it, col_fil] <- DPE_sub[ident_it, col_fil] * ratio_conso
+#
+#       }
+#       DPE_sub$DPE_fin[ident_it] <- constr_distri_sub$DPE_to[cpt_it]
+#       DPE_sub$year_build[ident_it] <- year_sub
+#     }
+#   }
 
 
   #Recalcul des sommes de dépenses énergétiques
@@ -790,7 +808,7 @@ get_constr_target <- function(MatisseData){
 #'
 #' @param constr_target
 #'
-#' @return
+#' @return A tibble for the construction targets
 #'
 #' @examples
 #' distrib_overbuild(constr_target)
@@ -851,6 +869,7 @@ get_ratio_m2_hor <- function(MatisseData){
 #' @export
 #'
 #' @examples
+#' modify_budget_housing_equipement(MatisseData)
 modify_budget_housing_equipement <- function(MatisseData){
 
   #Data
@@ -893,6 +912,8 @@ modify_budget_housing_equipement <- function(MatisseData){
     mutate(SpendingRef = spending_aggr_sub %>% select(-IDENT_MEN) %>% rowSums()) %>%
     select(IDENT_MEN, SpendingRef) %>%
     mutate(SpendingHor = SpendingRef)
+  price_index_hor_df <- price_index_hor_df %>% filter(year == MatisseParams$year_hor) %>% select(-year) %>% mutate(Hors_budget = 1, Others = 1)
+
 
   spending_new <- ventilate_solde(spending_econo_df =  spending_trans_df,
                                   men_elast_df =  men_elast_sub,
