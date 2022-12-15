@@ -232,7 +232,7 @@ get_dom_conso_proj <- function(MatisseData, years = c()){
     left_join(const_surf_sub, by = c("DPE" = "DPE_from", "year")) %>%
     left_join(renov_to_surf_sub, by = c("DPE" = "DPE_from", "year")) %>%
     left_join(renov_from_surf_sub, by = c("DPE" = "DPE_from", "year")) %>%
-    mutate(across(everything(), ~replace_na(.x, 0))) %>%
+    mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
     rename(kWh = value)
   rm(parc_sub, const_surf_sub, renov_to_surf_sub, renov_from_surf_sub)
 
