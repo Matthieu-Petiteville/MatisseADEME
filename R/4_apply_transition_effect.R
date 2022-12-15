@@ -33,7 +33,7 @@ apply_transition_effect <- function(MatisseData){
   #Calculate effects
   # effet_mat_df <-  MatisseADEME:::apply_teletravail_effect(menage_sub, effet_mat_df)
   # effet_mat_df <-  MatisseADEME:::apply_ecoconduite(effet_mat_df)
-  effet_mat_df <- MatisseADEME:::apply_homothetic_reduction(effet_mat_df)
+  effet_mat_df <- MatisseADEME:::apply_homothetic_reduction(MatisseData, effet_mat_df)
 
   #Apply
   spending_var_df <- spending_aggr_sub %>%
@@ -47,11 +47,21 @@ apply_transition_effect <- function(MatisseData){
     spending_trans_df[sect_it] <- spending_trans_df[sect_it] * effet_mat_df[sect_it]
   }
 
+  #Tests
+  # pondmen_sub <- MatisseData$pondmen
+  # print(sum(pondmen_sub$pond_rew * spending_aggr_sub$Carbu))
+  # print(sum(pondmen_sub$pond_rew * spending_trans_df$Carbu))
+  # print(sum(pondmen_sub$pond_rew * spending_trans_df$Carbu)/sum(pondmen_sub$pond_rew * spending_aggr_sub$Carbu))
+
   spending_new <- ventilate_solde(spending_econo_df =  spending_trans_df,
                                   men_elast_df =  men_elast_sub,
                                   spending_var_df =  spending_var_df,
                                   price_index_hor_df =  price_index_hor_df,
                                   floor_at_z = T)
+  #Tests
+  # print(sum(pondmen_sub$pond_rew * spending_aggr_sub$Carbu))
+  # print(sum(pondmen_sub$pond_rew * spending_new$Carbu))
+  # print(sum(pondmen_sub$pond_rew * spending_new$Carbu)/sum(pondmen_sub$pond_rew * spending_aggr_sub$Carbu))
 
   return(spending_new)
 }
@@ -142,24 +152,60 @@ apply_ecoconduite <- function(effet_mat_df){
 #' @return A chained effet_mat_df dataframe
 #'
 #' @examples
-#' apply_homothetic_reduction(effet_mat_df)
-apply_homothetic_reduction <- function(effet_mat_df){
+#' apply_homothetic_reduction(MatisseData, effet_mat_df)
+apply_homothetic_reduction <- function(MatisseData, effet_mat_df){
 
-  #Data
-  transition_df <- get_csv_data(to_include = c("transition"))$transition
-  transition_df <- transition_df %>%
-    filter(Type == "Sobriete", Year == MatisseParams$year_hor, Scenario == MatisseParams$scenario) %>%
-    select(MatisseAggr, Year, Value) %>%
-    distinct()
+  #Ajustement automatique
+  if(MatisseParams$transition_adjust & MatisseParams$transition_last){
+    cat("============ Applying transition effects estimated from energy consumption ============\n")
+    ener_var_3me_sub <- get_ener_var_3Me()
+    ener_var_mat_sub <- get_ener_var_Matisse(MatisseData)
 
+    #Calcul des ratios d'ajustement
+    for(ener_it in unique(ener_var_3me_sub$Type)){
+      if(ener_it == "Essence"){sect_adj <- c("Carbu", "Fioul")}
+      if(ener_it == "Gaz"){sect_adj <- c("Gaz", "AutreEner")}
+      if(ener_it == "Elec"){sect_adj <- c("Elec", "ElecVeh")}
 
-  #Application de l'effet
-  for(sect_it in transition_df$MatisseAggr){
-    ratio_red <- as.numeric(transition_df %>% filter(MatisseAggr == sect_it) %>% pull(Value))
-    if(length(ratio_red) == 0){ratio_red <- 1}
-    effet_mat_df[[sect_it]] <- effet_mat_df[[sect_it]] * ratio_red
+      var_3me <- ener_var_3me_sub %>%
+        filter(Type == ener_it, year == MatisseParams$year_hor) %>%
+        pull(ConsoPhys_var)
+      var_mat <- ener_var_mat_sub %>%
+        filter(Type == ener_it, year == MatisseParams$year_hor) %>%
+        pull(ConsoPhys_var)
+      ratio_adj <- as.numeric(var_3me / var_mat)
+
+      cat("Effect for ", ener_it, " : ", ratio_adj, "\n")
+
+      for(sect_it in sect_adj){
+        if(length(ratio_adj) == 0){ratio_adj <- 1}
+        effet_mat_df[[sect_it]] <- effet_mat_df[[sect_it]] * ratio_adj
+      }
+    }
+
+  }else{
+    #Ajustement par le fichier
+    cat("============ Applying transition effects from Transitions.csv file ============\n")
+    transition_df <- get_csv_data(to_include = c("transition"))$transition
+    transition_df <- transition_df %>%
+      filter(Type == "Sobriete",
+             Year == MatisseParams$year_hor,
+             Scenario == MatisseParams$scenario,
+             classement_dom == MatisseParams$classement_dom,
+             classement_veh == MatisseParams$classement_veh) %>%
+      select(MatisseAggr, Year, Value) %>%
+      distinct()
+
+    #Application de l'effet
+    for(sect_it in transition_df$MatisseAggr){
+      ratio_red <- as.numeric(transition_df %>% filter(MatisseAggr == sect_it) %>% pull(Value))
+      if(length(ratio_red) == 0){ratio_red <- 1}
+      effet_mat_df[[sect_it]] <- effet_mat_df[[sect_it]] * ratio_red
+    }
   }
 
   return(effet_mat_df)
 }
+
+
 
