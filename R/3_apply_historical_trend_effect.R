@@ -18,10 +18,10 @@ apply_historical_trend_effect <- function(MatisseData){
   #Data
   savings_sub <- MatisseData$savings
   spending_var_sub <- savings_sub %>%
-                      mutate(SpendingRef = Spending) %>%
+                      mutate(SpendingRef = Spending + Durable) %>%
                       select(IDENT_MEN, SpendingRef) %>%
                       left_join(MatisseData$savings_hor %>%
-                                  mutate(SpendingHor = Spending) %>%
+                                  mutate(SpendingHor = Spending + Durable) %>%
                                   select(IDENT_MEN, SpendingHor), by = "IDENT_MEN")
   men_elast_sub <- MatisseData$men_elast
   spending_aggr_sub <- MatisseData$spending_aggr
