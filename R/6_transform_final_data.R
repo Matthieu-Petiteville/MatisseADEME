@@ -19,6 +19,9 @@ transform_final_data <- function(MatisseData){
     left_join(MatisseData$new_dec, by = "IDENT_MEN")
 
   #Save file
+  if(!dir.exists(MatisseFiles$save_folder)){
+    dir.create(MatisseFiles$save_folder)
+  }
   save(MatisseData, file= paste(MatisseFiles$save_folder, "/MatisseData.rdata", sep =""))
 
   return(MatisseData)
@@ -32,7 +35,7 @@ transform_final_data <- function(MatisseData){
 #'
 #' @param MatisseData
 #'
-#' @return
+#' @return A tibble containing the horizon deciles
 #' @export
 #'
 #' @examples
@@ -61,3 +64,17 @@ get_dec_hor <- function(MatisseData){
 
   return(savings_RDB_sub)
 }
+
+#
+# get_dec_consoener <- function(MatisseData){
+#
+#   #Data
+#   menage_sub <- MatisseData$menage
+#   savings_sub <- MatisseData$savings_hor
+#   pondmen_sub <- MatisseData$pondmen
+#
+#
+#
+#
+# }
+
