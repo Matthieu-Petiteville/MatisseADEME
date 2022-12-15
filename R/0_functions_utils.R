@@ -8,7 +8,7 @@
 #' @param stats_to_show The type of data we want
 #'
 #'
-#' @return
+#' @return A list of stats
 #' @export
 #'
 #' @examples
@@ -28,15 +28,15 @@ easy_stats <- function(x, stats_to_show = 1:2){
                           Nb  = length(x),
                           Mean = mean(x, na.rm = T),
                           Median = median(x, na.rm = T),
-                          Max = max_na(x, na.rm = T),
                           Min = min_na(x, na.rm = T),
+                          Max = max_na(x, na.rm = T),
                           StDev = sd(x, na.rm = T),
                           NbNa = length(which(is.na(x))))
       }else if(is.character(x)){
         stat_df <- tibble(Type = typeof(x),
                           Nb  = length(x),
-                          Max = max_na(x, na.rm = T),
                           Min = min_na(x, na.rm = T),
+                          Max = max_na(x, na.rm = T),
                           NbNa = length(which(is.na(x))),
                           NbUnique = length(unique(x)))
       }else if(is.logical(x)){
@@ -51,8 +51,8 @@ easy_stats <- function(x, stats_to_show = 1:2){
     }
     if(2 %in% stats_to_show){
         stat_df <- tibble(NbVal = length(x),
-                          RkMax = which(x == max_na(x, na.rm = T))[1],
                           RkMin = which(x == min_na(x, na.rm = T))[1],
+                          RkMax = which(x == max_na(x, na.rm = T))[1],
                           RkNA = which(is.na(x))[1])
         res_l[["Rank"]] <- stat_df
     }
@@ -161,6 +161,12 @@ replace_nan <- function(x = c(), by = NA, ...){
     x[l_idx] <- by
     return(x)
   }
+
+  try({
+    l_idx <- which(is.nan(x))
+    x[l_idx] <- by
+    return(x)
+  })
   stop("Not supported x type for function : replace_nan")
 
 }
@@ -175,10 +181,11 @@ replace_nan <- function(x = c(), by = NA, ...){
 #' @param x The vector
 #' @param item The item to be removed
 #'
-#' @return
+#' @return The vector excluding the value
 #' @export
 #'
 #' @examples
+#' remove_item(colnames(temp_df), item = c("year"))
 remove_item <- function(x = c(), item = c()){
 
   if(is.array(x) | is.vector(x)){
@@ -187,4 +194,48 @@ remove_item <- function(x = c(), item = c()){
   }
   stop("Not supported x type for function : remove_item")
 
+}
+
+
+# Chronometer -------------------------------------------------------------
+
+#' @title ChrStart
+#' @description Starts the chronometer with value in global var chrono_timest
+#'
+#' @return No return
+#' @export
+#'
+#' @examples
+#' ChrStart()
+ChrStart <- function(){
+  chrono_timest <<- Sys.time()
+  return(TRUE)
+}
+
+#' @title ChrPrint
+#' @description Prints the value of the chronometer
+#'
+#' @return No return
+#' @export
+#'
+#' @examples
+#' ChrPrint()
+ChrPrint <- function(){
+  print(Sys.time()-chrono_timest)
+  return(TRUE)
+}
+
+#' @title ChrEnd
+#' @description Prints the value of the chronometer and cleans the global variable chrono_timest
+#'
+#' @return No return
+#' @export
+#'
+#' @examples
+#' ChrEnd()
+ChrEnd <- function(){
+  print(Sys.time()-chrono_timest)
+  glob_var <- ls(pos = ".GlobalEnv")
+  rm(list = glob_var[grep("chrono_timest", glob_var)] , pos=".GlobalEnv")
+  return(TRUE)
 }
