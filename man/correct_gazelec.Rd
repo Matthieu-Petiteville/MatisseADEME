@@ -12,7 +12,7 @@ correct_gazelec(spending_aggr, MatisseData)
 \item{MatisseData}{A MatisseData tibble}
 }
 \value{
-
+A  corrected spending_aggr tibble
 }
 \description{
 This function corrects the category M04.5.0 which is undissociated gaz and elec for households

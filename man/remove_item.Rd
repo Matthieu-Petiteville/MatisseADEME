@@ -12,8 +12,11 @@ remove_item(x = c(), item = c())
 \item{item}{The item to be removed}
 }
 \value{
-
+The vector excluding the value
 }
 \description{
 Removes a vector of items from a vector
+}
+\examples{
+remove_item(colnames(temp_df), item = c("year"))
 }

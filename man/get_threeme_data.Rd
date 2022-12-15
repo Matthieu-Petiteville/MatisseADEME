@@ -4,7 +4,7 @@
 \alias{get_threeme_data}
 \title{get_threeme_data}
 \usage{
-get_threeme_data(years = NULL, fields = NULL)
+get_threeme_data(years = NULL, fields = NULL, file_force = "")
 }
 \arguments{
 \item{years}{A vector of years to return data from}

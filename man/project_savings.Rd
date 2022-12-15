@@ -19,5 +19,5 @@ This function projects the saving rate dataframe to year_hor, based on the initi
 and the column for savings (Savings or SavingsExDurable)
 }
 \examples{
-
+project_savings(MatisseData, sav_proj)
 }

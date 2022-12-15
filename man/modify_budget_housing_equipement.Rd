@@ -16,3 +16,6 @@ A spending_aggr tibble
 A function that modifies the budgets for households based on the equipement changes, including the
 ventilation of budget residues
 }
+\examples{
+modify_budget_housing_equipement(MatisseData)
+}

@@ -10,7 +10,7 @@ get_parc_auto(MatisseData)
 \item{MatisseData}{}
 }
 \value{
-
+A parc_auto dataframe of the projected number of cars
 }
 \description{
 A function that recalculates a few columns in vehic (NbVehic_XXX and min/max years of cars)

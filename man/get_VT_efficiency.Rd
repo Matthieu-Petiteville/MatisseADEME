@@ -10,7 +10,7 @@ get_VT_efficiency(MatisseData)
 \item{years}{}
 }
 \value{
-
+A tibble of values for VT efficiency
 }
 \description{
 Returns a tibble with the evolution of average consumption for VT, which is then used to adjust

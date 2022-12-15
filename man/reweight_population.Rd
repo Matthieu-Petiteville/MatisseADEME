@@ -10,6 +10,7 @@ reweight_population(
   men_proj,
   surf_proj,
   auto_proj,
+  work_proj,
   constraints = NULL
 )
 }
@@ -23,7 +24,7 @@ reweight_population(
 \item{auto_proj}{The projected vehicle (columns : year, value)}
 
 \item{constraints}{The list of columns on which the calibration is done. Defaults include all valid values.
-Valid values : c("TYPMEN5", "ZEAT", "AGEPR", "TUU", "VAG", "AgeSex", "SurfHab", "NbVehic")}
+Valid values : c("TYPMEN5", "ZEAT", "AGEPR", "TUU", "VAG", "AgeSex", "SurfHab", "NbVehic", "NACTIFS", "NACTOCCUP")}
 }
 \value{
 Return the a pondmen_df datafram containing just the old and new ponderations

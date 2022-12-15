@@ -10,7 +10,7 @@ get_dec_hor(MatisseData)
 \item{MatisseData}{}
 }
 \value{
-
+A tibble containing the horizon deciles
 }
 \description{
 Produces the new Déciles of revenus (based on RDB)

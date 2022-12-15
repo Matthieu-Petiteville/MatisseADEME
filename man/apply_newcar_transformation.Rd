@@ -12,8 +12,11 @@ apply_newcar_transformation(MatisseData, attribute_new_car, year)
 \item{attribute_new_car}{}
 }
 \value{
-
+A transformed MatisseData with new car inclusion
 }
 \description{
 Applies the different transformations of VE replacement
+}
+\examples{
+apply_newcar_transformation(MatisseData, attribute_new_car, year)
 }

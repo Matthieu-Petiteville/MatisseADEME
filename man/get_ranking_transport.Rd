@@ -15,13 +15,13 @@ Accepted values are:
 
 \item{dec_inc}{A string (valid dec or inc) indicating if the type should be ordered increasingly or decreasingly.
 In the natural process, low ranking will be favored for selection. Thus a 'Cost dec' type + dec_inc will
-result in the higher monetary spending be favored.}
+result in the higher monetary spending be favored. RDB for ranking on RDB}
 }
 \value{
-
+A ranking tibble for transport ranking
 }
 \description{
-
+A function to rank households between them to attribute new vehicles
 }
 \examples{
 get_ranking_transport(MatisseData, type = "Cost", dec_inc = "dec")

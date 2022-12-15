@@ -10,8 +10,7 @@ initialize_MatisseParams(
   year_hor = 2035,
   scenario = "S1",
   classement_dom = "Cost_dec",
-  classement_veh = "Cost_dec",
-  save_intermed_file = FALSE
+  classement_veh = "Cost_dec"
 )
 }
 \arguments{
@@ -26,8 +25,6 @@ initialize_MatisseParams(
 \item{classement_dom}{The way to select households to have a technical change for houses (Cost_dec standard)}
 
 \item{classement_veh}{The way to select households to switch to electric vehicule (Cost_dec standard)}
-
-\item{save_intermed_file}{Should intermediary files be saved}
 }
 \value{
 TRUE but creates MatisseParams, a global variable, a list that contains all the params

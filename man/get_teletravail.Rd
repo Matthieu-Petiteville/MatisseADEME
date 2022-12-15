@@ -7,7 +7,7 @@
 get_teletravail()
 }
 \value{
-
+A tibble extract of the transition file
 }
 \description{
 Returns the data from the transition file

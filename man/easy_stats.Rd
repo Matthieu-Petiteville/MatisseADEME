@@ -12,7 +12,7 @@ easy_stats(x, stats_to_show = 1:2)
 \item{stats_to_show}{The type of data we want}
 }
 \value{
-
+A list of stats
 }
 \description{
 Returns a list of standard statistics about the vec input

@@ -10,7 +10,7 @@ get_ener_3me(years = c())
 \item{years}{The years on which to extract the data}
 }
 \value{
-
+A transformed tibble for the domestic energy consumption from ThreeMe
 }
 \description{
 Gets the domener data from Threeme : per energy, per year, volumes in kWh, price in ME/kWh,

@@ -10,7 +10,7 @@ distrib_overbuild(constr_target)
 \item{constr_target}{}
 }
 \value{
-
+A tibble for the construction targets
 }
 \description{
 An internal function to update the constr_target tibble when there's over construction

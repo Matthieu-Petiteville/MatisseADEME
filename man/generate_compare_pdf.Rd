@@ -9,9 +9,6 @@ generate_compare_pdf(MatisseData)
 \arguments{
 \item{MatisseData}{}
 }
-\value{
-
-}
 \description{
 Produces the report in pdf format
 }

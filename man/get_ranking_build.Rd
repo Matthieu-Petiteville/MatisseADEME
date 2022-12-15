@@ -18,10 +18,11 @@ Accepted values are:
 
 \item{dec_inc}{A string (valid dec or inc) indicating if the type should be ordered increasingly or decreasingly.
 In the natural process, low ranking will be favored for selection. Thus a 'Cost dec' type + dec_inc will
-result in the higher monetary spending be favored.}
+result in the higher monetary spending be favored."Random" uses the default ranking of household (the line number of each)
+to generate a pseudorandom but deterministic allocation of tech change.}
 }
 \value{
-
+A ranking tibble
 }
 \description{
 A function to rank the household for the renovation.
