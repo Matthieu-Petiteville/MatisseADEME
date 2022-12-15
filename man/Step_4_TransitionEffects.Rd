@@ -10,7 +10,7 @@ Step_4_TransitionEffects(MatisseData)
 \item{MatisseData}{A MatisseData list}
 }
 \value{
-
+A MatisseData list
 }
 \description{
 Applies the transition effects (changes in behaviours)

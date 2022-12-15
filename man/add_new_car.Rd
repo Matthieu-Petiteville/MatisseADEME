@@ -18,7 +18,7 @@ add_new_car(automob, old_car, rep_type, carbu_type, year)
 \item{year}{The year of the new car}
 }
 \value{
-
+A transformed automob tibble
 }
 \description{
 Adds a new vehicle to the automob dataframe based on the line of old_car

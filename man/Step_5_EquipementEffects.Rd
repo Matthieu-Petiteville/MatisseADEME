@@ -10,7 +10,7 @@ Step_5_EquipementEffects(MatisseData)
 \item{MatisseData}{A MatisseData list}
 }
 \value{
-
+A MatisseData list
 }
 \description{
 Applies the equipement effects (changes in house and transportation equipement)

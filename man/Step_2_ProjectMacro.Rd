@@ -10,7 +10,7 @@ Step_2_ProjectMacro(MatisseData)
 \item{MatisseData}{A MatisseData list}
 }
 \value{
-
+A MatisseData list
 }
 \description{
 Project the macro elements on households

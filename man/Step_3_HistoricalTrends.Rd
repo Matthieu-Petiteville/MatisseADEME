@@ -10,7 +10,7 @@ Step_3_HistoricalTrends(MatisseData)
 \item{MatisseData}{A MatisseData list}
 }
 \value{
-
+A MatisseData list
 }
 \description{
 Applies the historical trends effects (changes in income, prices affect spending)

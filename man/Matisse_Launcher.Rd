@@ -10,7 +10,7 @@ Matisse_Launcher()
 \item{MatisseData}{}
 }
 \value{
-
+A MatisseData list
 }
 \description{
 The main launcher of Matisse

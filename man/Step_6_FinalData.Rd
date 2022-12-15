@@ -10,10 +10,10 @@ Step_6_FinalData(MatisseData)
 \item{MatisseData}{A MatisseData list}
 }
 \value{
-
+A MatisseData list
 }
 \description{
-
+The final data modification, given all former changes
 }
 \examples{
 Step_6_FinalData(MatisseData)
