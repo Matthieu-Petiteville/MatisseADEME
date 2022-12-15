@@ -10,7 +10,7 @@
 #'
 #' @param MatisseData
 #'
-#' @return
+#' @return A MatisseData list
 #' @export
 #'
 #' @examples
@@ -37,7 +37,6 @@ Matisse_Launcher <- function(){
 
   #Case transition last pour tester emplacement de transition
   if(MatisseParams$transition_last){MatisseData <- Step_4_TransitionEffects(MatisseData)}
-
 
   # Step 6 : add final data -------------------------------------------------------------------------------------------------------------------------------
   MatisseData <- Step_6_FinalData(MatisseData)
@@ -96,9 +95,7 @@ Step_0_Extract_All_Data <- function(){
   MatisseData$house_proj <- get_house_proj()
   MatisseData$renov_cost_proj <- get_renov_cost_proj()
   MatisseData$dom_conso_proj <- get_dom_conso_proj(MatisseData, years = MatisseParams$year_ref:MatisseParams$year_hor)
-  MatisseData$save_inter_data <- MatisseData$menage %>%
-    select(IDENT_MEN)
-
+  MatisseData$newauto_th_conso <- get_newauto_th_conso_proj()
 
   #Aggregation des données au niveaux économétrie
   spending_durable_df <- MatisseData$spending %>% left_join(MatisseData$durable, by = "IDENT_MEN")
@@ -134,6 +131,7 @@ Step_1_Reweight <- function(MatisseData){
   years <- c(MatisseParams$year_ref, MatisseParams$year_hor)
   surf_proj <- get_threeme_data(years = years, fields = c("BUIL_H01_2"))
   pop_proj <- get_pop_proj(years = years , buckets = MatisseParams$pop_age_buckets)
+  work_proj <- get_work_proj(years = years)
   men_proj <- get_men_proj(years = c(MatisseParams$year_ref, MatisseParams$year_hor))
   auto_proj <- get_threeme_data(years = years, fields = c("AUTO_H01_2"))
 
@@ -143,13 +141,12 @@ Step_1_Reweight <- function(MatisseData){
                                       men_proj = men_proj,
                                       surf_proj = surf_proj,
                                       auto_proj = auto_proj,
-                                      constraints = c("TYPMEN5", "ZEAT", "TUU", "VAG", "SURFHAB", "AgeSex", "NbVehic"))
+                                      work_proj = work_proj,
+                                      constraints = c("TYPMEN5", "ZEAT", "TUU", "VAG", "SURFHAB",
+                                                      "AgeSex", "NbVehic", "NACTIFS", "NACTOCCUP"))
 
-  #Ajout données intermédiaires
-  MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
-    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
-    rename(Elec_Step1 = Elec, Carbu_Step1 = Carbu, Gaz_Step1 = Gaz, Fioul_Step1 = Fioul)
-
+  #Sauvegarde données intermédiaires
+  MatisseData$spending_aggr_rew <- MatisseData$spending_aggr
 
   return(MatisseData)
 }
@@ -161,7 +158,7 @@ Step_1_Reweight <- function(MatisseData){
 #'
 #' @param MatisseData A MatisseData list
 #'
-#' @return
+#' @return A MatisseData list
 #' @export
 #'
 #' @examples
@@ -196,7 +193,7 @@ Step_2_ProjectMacro <- function(MatisseData){
 #'
 #' @param MatisseData A MatisseData list
 #'
-#' @return
+#' @return A MatisseData list
 #' @export
 #'
 #' @examples
@@ -208,10 +205,10 @@ Step_3_HistoricalTrends <- function(MatisseData){
 
   #Switch to econometry spending agregation
   MatisseData$spending_var <- MatisseData$savings %>%
-    mutate(SpendingRef = Spending) %>%
+    mutate(SpendingRef = Spending + Durable) %>%
     select(IDENT_MEN, SpendingRef) %>%
     left_join(MatisseData$savings_hor %>%
-                mutate(SpendingHor = Spending) %>%
+                mutate(SpendingHor = Spending + Durable) %>%
                 select(IDENT_MEN, SpendingHor), by = "IDENT_MEN")
   attr(MatisseData$spending_var$SpendingRef, "label") <- "Spending à l'année de référence"
   attr(MatisseData$spending_var$SpendingHor, "label") <- "Spending à l'année d'horizon"
@@ -220,9 +217,7 @@ Step_3_HistoricalTrends <- function(MatisseData){
   MatisseData$spending_aggr <- apply_historical_trend_effect(MatisseData)
 
   #Save InterMed data
-  MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
-    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
-    rename(Elec_Step3 = Elec, Carbu_Step3 = Carbu, Gaz_Step3 = Gaz, Fioul_Step3 = Fioul)
+  MatisseData$spending_aggr_tend <- MatisseData$spending_aggr
 
   return(MatisseData)
 }
@@ -235,7 +230,7 @@ Step_3_HistoricalTrends <- function(MatisseData){
 #'
 #' @param MatisseData A MatisseData list
 #'
-#' @return
+#' @return A MatisseData list
 #' @export
 #'
 #' @examples
@@ -249,9 +244,7 @@ Step_4_TransitionEffects <- function(MatisseData){
   MatisseData$spending_aggr <- apply_transition_effect (MatisseData)
 
   #Save InterMed data
-  MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
-    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
-    rename(Elec_Step4 = Elec, Carbu_Step4 = Carbu, Gaz_Step4 = Gaz, Fioul_Step4 = Fioul)
+  MatisseData$spending_aggr_trans <- MatisseData$spending_aggr
 
   return(MatisseData)
 }
@@ -262,7 +255,7 @@ Step_4_TransitionEffects <- function(MatisseData){
 #'
 #' @param MatisseData A MatisseData list
 #'
-#' @return
+#' @return A MatisseData list
 #' @export
 #'
 #' @examples
@@ -276,18 +269,13 @@ Step_5_EquipementEffects <- function(MatisseData){
   MatisseData <- apply_housing_equipement(MatisseData)
 
   #Save InterMed data
-  MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
-    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
-    rename(Elec_Step5House = Elec, Carbu_Step5House = Carbu, Gaz_Step5House = Gaz, Fioul_Step5House = Fioul)
-
+  MatisseData$spending_aggr_equip_house <- MatisseData$spending_aggr
 
   #Transportation effects
   MatisseData <- apply_transport_equipement(MatisseData)
 
   #Save InterMed data
-  MatisseData$save_inter_data <- MatisseData$save_inter_data %>%
-    left_join(MatisseData$spending_aggr %>% select(IDENT_MEN, Elec, Carbu, Gaz, Fioul), by ="IDENT_MEN") %>%
-    rename(Elec_Step5Transport = Elec, Carbu_Step5Transport = Carbu, Gaz_Step5Transport = Gaz, Fioul_Step5Transport = Fioul)
+  MatisseData$spending_aggr_equip_trans <- MatisseData$spending_aggr
 
   return(MatisseData)
 }
@@ -297,11 +285,11 @@ Step_5_EquipementEffects <- function(MatisseData){
 
 
 #' @title Step_6_FinalData
-#' @description
+#' @description The final data modification, given all former changes
 #'
 #' @param MatisseData A MatisseData list
 #'
-#' @return
+#' @return A MatisseData list
 #' @export
 #'
 #' @examples
@@ -312,7 +300,6 @@ Step_6_FinalData <- function(MatisseData){
   cat("====================== Step 6 ", MatisseParams$scenario," : Final Data ======================\n")
 
   MatisseData <- transform_final_data(MatisseData)
-
 
 
 }
