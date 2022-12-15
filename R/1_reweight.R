@@ -9,7 +9,7 @@
 #' @param men_proj The projected households (columns : type, year, value)
 #' @param auto_proj The projected vehicle (columns : year, value)
 #' @param constraints The list of columns on which the calibration is done. Defaults include all valid values.
-#' Valid values : c("TYPMEN5", "ZEAT", "AGEPR", "TUU", "VAG", "AgeSex", "SurfHab", "NbVehic")
+#' Valid values : c("TYPMEN5", "ZEAT", "AGEPR", "TUU", "VAG", "AgeSex", "SurfHab", "NbVehic", "NACTIFS", "NACTOCCUP")
 #'
 #' @return Return the a pondmen_df datafram containing just the old and new ponderations
 #' @export
@@ -17,14 +17,14 @@
 #' @examples
 #' reweight_population(MatisseData, pop_proj, men_proj, constraints = c("TYPMEN5", "TUU"))
 #'
-reweight_population <- function(MatisseData, pop_proj, men_proj, surf_proj, auto_proj, constraints = NULL){
+reweight_population <- function(MatisseData, pop_proj, men_proj, surf_proj, auto_proj, work_proj, constraints = NULL){
 
   # Data ----------------------------------------------------------------------------------------------------------------------------------------------------
   menage_sub <- MatisseData$menage
   indiv_sub <- MatisseData$indiv
   vehic_sub <- MatisseData$vehic
 
-  valid_var_vec <- c("TYPMEN5", "ZEAT", "AGEPR", "TUU", "VAG", "SURFHAB", "AgeSex", "NbVehic")
+  valid_var_vec <- c("TYPMEN5", "ZEAT", "AGEPR", "TUU", "VAG", "SURFHAB", "AgeSex", "NbVehic", "NACTIFS", "NACTOCCUP")
   if(is.null(constraints)){
     constraints <- valid_var_vec
   }
@@ -109,6 +109,18 @@ reweight_population <- function(MatisseData, pop_proj, men_proj, surf_proj, auto
   }
 
   #___________________________________________________________________________________________________________________________________________
+  # NbAct : The number of active individuals
+  if("NACTIFS" %in% constraints){
+    men_dum_vec <- c(men_dum_vec, "NACTIFS")
+  }
+
+  #___________________________________________________________________________________________________________________________________________
+  # NbActChom : The number of active individuals
+  if("NACTOCCUP" %in% constraints){
+    men_dum_vec <- c(men_dum_vec, "NACTOCCUP")
+  }
+
+  #___________________________________________________________________________________________________________________________________________
   # Buckets AgeSex : a group by age and sex of indiv_subiduals (12 buckets on standard, depends on pop_proj split)
   # Adding buckets in indiv_sub, gives the bucket for one indiv_subidual, then adding the sum in menage_sub
   if("AgeSex" %in% constraints){
@@ -190,7 +202,16 @@ reweight_population <- function(MatisseData, pop_proj, men_proj, surf_proj, auto
   adj_ratio <- target_df$npers / sum(target_df[, col_vec])
   target_df[, col_vec] <- target_df[, col_vec] * adj_ratio
 
-
+  #The Actifs population and the ActifsOccupes population : growth of rate of pop_proj and adjust to reflect the occupied pop
+  col_it <- "NACTIFS"
+  target_df$NACTIFS = target_df$npers *
+    ref_df$NACTIFS / ref_df$npers *
+    work_proj %>% filter(year == MatisseParams$year_hor) %>% pull(Act2Pop) /
+    work_proj %>% filter(year == MatisseParams$year_ref) %>% pull(Act2Pop)
+  target_df$NACTOCCUP = target_df$npers *
+    ref_df$NACTOCCUP / ref_df$npers *
+    work_proj %>% filter(year == MatisseParams$year_hor) %>% pull(ActOcc2Pop) /
+    work_proj %>% filter(year == MatisseParams$year_ref) %>% pull(ActOcc2Pop)
 
 # Reweighting ---------------------------------------------------------------------------------------------------------------------------------------------
 
