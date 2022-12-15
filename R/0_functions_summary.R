@@ -1490,9 +1490,9 @@ summarise_auto_count <- function(MatisseData, scenario, split_by = c(), subset_i
 # summarise_gini_curve ------------------------------------------------------------------------------------------------------------------------------------
 #' @title summarise_gini_curve
 #'
-#' @param weight
-#' @param value
-#' @param nbpoints
+#' @param weight The weight vector
+#' @param value The value vector
+#' @param nbpoints Param nbpoint
 #'
 #' @return A tibble of cumsum pond and value
 #' @export
