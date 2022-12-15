@@ -250,6 +250,38 @@ get_men_proj <- function(years){
 }
 
 
+# get_work_proj -------------------------------------------------------------------------------------------------------------------------------------------
+#' @title get_work_proj
+#' @description Returns the rate of active and unemployed to population
+#'
+#' @param years The years to target
+#'
+#' @return A work_proj tibble
+#' @export
+#'
+#' @examples
+#' get_work_proj(years)
+get_work_proj <- function(years){
+
+  #Data
+  work_proj <- tibble()
+  sorties_df <- get_threeme_data(years = years,
+                                 fields = c("WAPOP", "POP_TOT", "UNR_FR_2"))
+
+  #Calcul des nombres d'actifs et de chômeurs
+  work_proj <- sorties_df %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
+    mutate(NACTIFS = WAPOP * 1000) %>%
+    mutate(NACTOCCUP = (1 - UNR_FR_2) * WAPOP * 1000) %>%
+    mutate(POPTOT = POP_TOT * 1000) %>%
+    mutate(Act2Pop = NACTIFS / POPTOT) %>%
+    mutate(ActOcc2Pop = NACTOCCUP / POPTOT) %>%
+    select(year, POPTOT, NACTIFS, NACTOCCUP, Act2Pop, ActOcc2Pop)
+
+  return(work_proj)
+
+}
+
 
 # get_income_proj -----------------------------------------------------------------------------------------------------------------------------------------
 #' @title get_income_proj
@@ -270,13 +302,13 @@ get_income_proj <- function(years){
                                  fields = c("W_S_2", "L_S_2","W_SE_2", "L_SE_2",
                                             "PRESOC_DOM_U_VAL_2",
                                             "PRESOC_DOM_OTH_VAL_2",
-                                            "FW_VAL",
+                                            "FW_VAL_2",
                                             "^TCO_VAL_HH_2$"))
   sorties_df$value <- as.numeric(sorties_df$value)
 
   #Revenus d'activité
   rev_act_df <- sorties_df %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
     mutate(Rev_Activite = L_S_2 * W_S_2 + L_SE_2 * W_SE_2) %>%
     select(year, Rev_Activite) %>%
     pivot_longer(cols = Rev_Activite, names_to ="type") %>%
@@ -306,13 +338,13 @@ get_income_proj <- function(years){
   #Revenus du patrimoine
   rev_pat_df <- sorties_df %>%
     rename(type = Var) %>%
-    filter(type == "FW_VAL") %>%
+    filter(type == "FW_VAL_2") %>%
     mutate(type = "Rev_Patrimoine")
   inc_proj <- inc_proj %>% dplyr::bind_rows(rev_pat_df)
 
   #Revenus exceptionnels
   rev_exc <- inc_proj %>%
-    pivot_wider(id_cols = c(year, type), names_from = type) %>%
+    pivot_wider(id_cols = year, names_from = type) %>%
     mutate(Rev_Exceptionnel = Rev_Activite + Rev_Chomage + Rev_Retraite + Rev_Patrimoine) %>%
     select(year, Rev_Exceptionnel) %>%
     mutate(Rev_Exceptionnel = Rev_Exceptionnel / first(Rev_Exceptionnel)) %>%
@@ -323,6 +355,13 @@ get_income_proj <- function(years){
   rev_etr_df <- rev_exc %>%
     mutate(type = "Rev_Etranger")
   inc_proj <- inc_proj %>% dplyr::bind_rows(rev_etr_df)
+
+  #Revenus de TC (attention montant global tous ménages)
+  rev_tc_df <- sorties_df %>%
+    rename(type = Var) %>%
+    filter(type == "TCO_VAL_HH_2") %>%
+    mutate(type = "Rev_TaxeCarbone")
+  inc_proj <- inc_proj %>% dplyr::bind_rows(rev_tc_df)
 
   return(inc_proj)
 
@@ -344,12 +383,12 @@ get_taxe_proj <- function(years){
 
   #Data
   sorties_df <- get_threeme_data(years = years,
-                                 fields = c("IR_VAL_2", "OTHT_2", "^TCO_VAL_HH_2$"))
+                                 fields = c("IR_VAL_2", "^AIC_VAL_H01_2$", "^TCO_VAL_HH_2$"))
   sorties_df$value <- as.numeric(sorties_df$value)
 
   #Transform data
   tax_proj <- sorties_df %>%
-    mutate(type = car::recode(sorties_df$Var, "'IR_VAL_2' = 'Impot_Revenu' ; 'OTHT_2' = 'Autres_Impots_Dir' ; 'TCO_VAL_HH_2' = 'Retro_TaxeCarbone' ")) %>%
+    mutate(type = car::recode(sorties_df$Var, "'IR_VAL_2' = 'Impot_Revenu' ; 'AIC_VAL_H01_2' = 'Autres_Impots_Dir' ; 'TCO_VAL_HH_2' = 'Retro_TaxeCarbone' ")) %>%
     select(-Var) %>%
     relocate(type)
 
@@ -378,7 +417,7 @@ get_savings_proj <- function(years){
 
   #Transform data
   sav_proj <- sorties_df %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
     mutate(Saving_rate = (DISPINC_VAL_H01_2 - EXP_OTH_VAL_H01_2 - EXP_MOB_VAL_H01_2) / DISPINC_VAL_H01_2) %>%
     select(year, Saving_rate)
 
@@ -406,10 +445,14 @@ get_savings_proj <- function(years){
 #' get_threeme_data(years = c("2015",2030))
 #' get_threeme_data(years = c("2015",2030), fields = c("POP_TOT", "Invalid", "VA_06_2"))
 #' get_threeme_data(years = c("2015",2030), fields = c("POP_TOT", "^PCHD_.*_2"))
-get_threeme_data <- function(years = NULL, fields = NULL){
+get_threeme_data <- function(years = NULL, fields = NULL, file_force = ""){
 
   #Read csv
-  sorties_df <- suppressMessages(readr::read_csv2(MatisseFiles$sorties3me_csv, show_col_types = FALSE))
+  if(file_force == ""){
+    sorties_df <- suppressMessages(readr::read_csv2(MatisseFiles$sorties3me_csv, show_col_types = FALSE))
+  }else{
+    sorties_df <- suppressMessages(readr::read_csv2(file_force, show_col_types = FALSE))
+  }
   years <- as.numeric(years)
   fields <- unique(fields)
 
@@ -473,7 +516,7 @@ get_elast <- function() {
 #' @title get_teletravail
 #' @description Returns the data from the transition file
 #'
-#' @return
+#' @return A tibble extract of the transition file
 #'
 #' @examples
 #' get_teletravail()
@@ -506,7 +549,7 @@ get_auto_proj <- function(){
   auto_proj <- auto_proj %>% mutate(value = as.numeric(value))
   auto_proj$Var <- car::recode(auto_proj$Var, "'AUTO_H01_2' = 'WholeParc' ; 'AUTO_ELEC_H01_2' = 'ParcElec' ; 'NEWAUTO_ELEC_H01_2' = 'VenteElec' ; 'NEWAUTO_H01_2' = 'VenteAll'")
   auto_proj <- auto_proj %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
     mutate(VenteTherm = VenteAll - VenteElec) %>%
     mutate(ParcTherm = WholeParc - ParcElec) %>%
     mutate(VE_rep_VT = c(0, diff(ParcElec))) %>%
@@ -562,7 +605,7 @@ get_auto_conso_proj <- function(){
       if(nrow(temp_auto_conso_proj) > 0){
         temp_auto_conso_proj <- temp_auto_conso_proj %>%
           select(-Ener, -Class) %>%
-          pivot_wider(id_cols = c(Type, year), names_from = Type)
+          pivot_wider(id_cols = year, names_from = Type)
 
         if("DepEur2006" %in% names(temp_auto_conso_proj)){
           temp_auto_conso_proj <- temp_auto_conso_proj %>%
@@ -597,6 +640,77 @@ get_auto_conso_proj <- function(){
   return(auto_conso_aggreg_df)
 
 }
+
+# get_newauto_th_conso_proj -------------------------------------------------------------------------------------------------------------------------------------
+#' @title get_newauto_th_conso_proj
+#' @description Return a tibble that contains the average consumption for new thermic vehicles, based on type of motor
+#' expressed in Euros-2006
+#'
+#' @return A newauto_conso_proj tibble
+#' @export
+#'
+#' @examples
+#' get_newauto_th_conso_proj()
+get_newauto_th_conso_proj <- function(){
+
+  #Data
+  newauto_conso_proj <- get_threeme_data(years = (MatisseParams$year_ref - 1):MatisseParams$year_hor,
+                                      fields = c("^KM_AUTO_H01_C._22_2$", "^EXP_AUTO_H01_C._22_2$", "^PEXP_22_H01_2$", "^NEWAUTO_TH_H01_C._2$"))
+  newauto_conso_proj$Var <- newauto_conso_proj$Var %>%
+    str_replace("EXP_AUTO_H01", "DepEur2006") %>%
+    str_replace("KM_AUTO_H01", "KmAuto") %>%
+    str_replace("PEXP_", "PriceIndex_Tot_") %>%
+    str_replace("NEWAUTO_TH_H01", "NewAuto") %>%
+    str_replace("_H01_2", "") %>%
+    str_replace("_2$", "") %>%
+    str_replace("_C", "_")
+  newauto_conso_proj <- newauto_conso_proj %>%
+    separate(Var, into = c("Type", "Class", "Ener"), sep = "_", fill = "right") %>%
+    select(-Ener)
+
+  #Extraction des consommations par classe et énergie pour les véhicules
+  auto_conso_aggreg_df <- tibble()
+  for(class_it in LETTERS[1:7]){
+    temp_auto_conso_proj <- newauto_conso_proj %>%
+      filter(Class == class_it) %>%
+      distinct()
+
+    if(nrow(temp_auto_conso_proj) > 0){
+      temp_auto_conso_proj <- temp_auto_conso_proj %>%
+        select(-Class) %>%
+        pivot_wider(id_cols = year, names_from = Type)
+
+      if("DepEur2006" %in% names(temp_auto_conso_proj)){
+        temp_auto_conso_proj <- temp_auto_conso_proj %>%
+          mutate(DepAuto_E = DepEur2006 ) %>%
+          select(year, DepAuto_E, KmAuto) %>%
+          mutate(Class = class_it)
+
+        auto_conso_aggreg_df <- auto_conso_aggreg_df %>%
+          bind_rows(temp_auto_conso_proj)
+      }
+    }
+  }
+  #Calcul des consommations moyennes par classe par km Euro2006
+  auto_conso_aggreg_df <- auto_conso_aggreg_df %>%
+    mutate(ConsoPerKm_Ekm = DepAuto_E / KmAuto) %>%
+    select(-DepAuto_E, -KmAuto )
+
+  #Calcul de la consommation moyenne nouveaux véhicules
+  newauto_conso_proj <- newauto_conso_proj %>%
+    filter(Type == "NewAuto") %>%
+    left_join(auto_conso_aggreg_df, by = c("year", "Class")) %>%
+    group_by(year) %>%
+    summarise(AverageNewConso = sum(value * ConsoPerKm_Ekm) / sum(value), by = "year") %>%
+    select(-by)
+  attr(newauto_conso_proj$AverageNewConso, "label") <- "Consommation moyenne des nouveaux véhicules thermiques, euro 2006"
+
+  #Return
+  return(newauto_conso_proj)
+
+}
+
+
 
 # get_house_proj -------------------------------------------------------------------------------------------------------------------------------------------
 #' @title get_house_proj
