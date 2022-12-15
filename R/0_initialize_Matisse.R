@@ -97,7 +97,6 @@ initialize_MatisseFiles <- function(){
 #' @param scenario The scenario from 3ME : values S1->S4
 #' @param classement_dom The way to select households to have a technical change for houses (Cost_dec standard)
 #' @param classement_veh The way to select households to switch to electric vehicule (Cost_dec standard)
-#' @param save_intermed_file Should intermediary files be saved
 #'
 #' @return  TRUE but creates MatisseParams, a global variable, a list that contains all the params
 #' @export
@@ -111,8 +110,7 @@ initialize_MatisseParams <-
            year_hor = 2035,
            scenario = "S1",
            classement_dom = "Cost_dec",
-           classement_veh = "Cost_dec",
-           save_intermed_file = FALSE) {
+           classement_veh = "Cost_dec") {
 
 
     MatisseADEME:::initialize_MatisseLibraries()
@@ -126,8 +124,10 @@ initialize_MatisseParams <-
       scenario = scenario,
       classement_dom = classement_dom,
       classement_veh = classement_veh,
-      save_intermed_file = save_intermed_file
-    )
+      rev_dec_vector = c(),
+      transition_last = F,
+      transition_adjust = F,
+      vt_eff_calc = "standard")
   return(TRUE)
 
 }
