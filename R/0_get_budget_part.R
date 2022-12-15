@@ -169,7 +169,7 @@ get_savings <- function(MatisseData, type = "ref"){
 #' @param spending_aggr A spending_aggr tibble
 #' @param MatisseData A MatisseData tibble
 #'
-#' @return
+#' @return A  corrected spending_aggr tibble
 #'
 #' @examples
 #' correct_gazelec(spending_aggr, MatisseData)
