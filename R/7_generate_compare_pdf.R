@@ -5,7 +5,6 @@
 #'
 #' @param MatisseData
 #'
-#' @return
 #' @export
 #'
 #' @examples
@@ -144,7 +143,7 @@ generate_compare_pdf <- function(MatisseData){
                                  fields = c("^DISPINC_VAL_H01_2$", "^DISPINC_AI_VAL_H01_2$"))
 
   income_threeme_df <- sorties_df %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
     rename(Income = DISPINC_AI_VAL_H01_2 , RDB = DISPINC_VAL_H01_2) %>%
     relocate(year, Income) %>%
     mutate(Taxes = Income - RDB) %>%
@@ -188,7 +187,7 @@ generate_compare_pdf <- function(MatisseData){
                                  fields = c("^DISPINC_VAL_H01_2$", "^EXP_OTH_VAL_H01_2$", "^EXP_MOB_VAL_H01_2$"))
 
   savings_threeme_df <- sorties_df %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
     mutate(Savings = DISPINC_VAL_H01_2 - EXP_MOB_VAL_H01_2 - EXP_OTH_VAL_H01_2) %>%
     rename(RDB = DISPINC_VAL_H01_2) %>%
     select(year, RDB, Savings) %>%
@@ -249,39 +248,15 @@ generate_compare_pdf <- function(MatisseData){
   spending_hor_matisse <- MatisseData$spending_aggr
 
 
-
 # Fioul Carbu ---------------------------------------------------------------------------------------------------------------------------------------------
   #Fioul Carbu
-  essence_threeme <- sorties_df %>%
-    filter(Var %in% c("PCH_22_2", "CH_22_2")) %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
-    mutate(ConsoEurCour = CH_22_2 * PCH_22_2,
-           ConsoEurRef = CH_22_2 * first(PCH_22_2)) %>%
-    mutate(ConsoEur_var = ConsoEurCour / first(ConsoEurCour)) %>%
-    mutate(ConsoPhys_var = ConsoEurRef / first(ConsoEurRef)) %>%
-    rename(IndicePrix = PCH_22_2) %>%
-    select(year, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var)
+  ener_var_3me_df <- get_ener_var_3Me()
+  ener_var_mat_df <- get_ener_var_Matisse(MatisseData)
 
-  essence_matisse_ref <- sum((spending_ref_matisse$Carbu + spending_ref_matisse$Fioul) * pondmen_sub$pondmen) / 1000000
-  essence_matisse_hor <- sum((spending_hor_matisse$Carbu + spending_hor_matisse$Fioul) * pondmen_sub$pond_rew) / 1000000
-  carbu_matisse_ref <-  sum((spending_ref_matisse$Carbu) * pondmen_sub$pondmen) / 1000000
-  carbu_matisse_hor <-  sum((spending_hor_matisse$Carbu) * pondmen_sub$pond_rew) / 1000000
-  fioul_matisse_ref <-  sum((spending_ref_matisse$Fioul) * pondmen_sub$pondmen) / 1000000
-  fioul_matisse_hor <-  sum((spending_hor_matisse$Fioul) * pondmen_sub$pond_rew) / 1000000
-
-  essence_matisse <- tibble(year = years,
-                            ConsoEurCour = c(essence_matisse_ref, essence_matisse_hor))
-  essence_matisse <- essence_matisse %>%
-    left_join(essence_threeme %>% select(year, IndicePrix), by = "year") %>%
-    mutate(ConsoEurRef = ConsoEurCour / (IndicePrix) * first(IndicePrix)) %>%
-    mutate(ConsoEur_var = ConsoEurCour / first(ConsoEurCour)) %>%
-    mutate(ConsoPhys_var = ConsoEurRef / first(ConsoEurRef)) %>%
-    mutate(CarbuEur = c(carbu_matisse_ref, carbu_matisse_hor)) %>%
-    mutate(FioulEur = c(fioul_matisse_ref, fioul_matisse_hor)) %>%
-    mutate(CarbuEurRef = CarbuEur / (IndicePrix) * first(IndicePrix)) %>%
-    mutate(FioulEurRef = FioulEur / (IndicePrix) * first(IndicePrix)) %>%
-    mutate(CarbuPhys_var = CarbuEurRef / first(CarbuEurRef)) %>%
-    mutate(FioulPhys_var = FioulEurRef / first(FioulEurRef))
+  essence_threeme <- ener_var_3me_df %>% filter(Type == "Essence") %>% select(-Type)
+  essence_matisse <- ener_var_mat_df %>% filter(Type == "Essence") %>%
+    select(year, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var, CarbuEur,
+           FioulEur, CarbuEurRef, FioulEurRef, CarbuPhys_var, FioulPhys_var)
 
   #Format
   theme_table <- ttheme_default(base_size = 7)
@@ -301,36 +276,10 @@ generate_compare_pdf <- function(MatisseData){
   grid.arrange(grobs = grob_list, ncol = 1)
 
 # Gaz ---------------------------------------------------------------------------------------------------------------------------------------------
-  gaz_threeme <- sorties_df %>%
-    filter(Var %in% c("PCH_24_2", "CH_24_2")) %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
-    mutate(ConsoEurCour = CH_24_2 * PCH_24_2,
-           ConsoEurRef = CH_24_2 * first(PCH_24_2)) %>%
-    mutate(ConsoEur_var = ConsoEurCour / first(ConsoEurCour)) %>%
-    mutate(ConsoPhys_var = ConsoEurRef / first(ConsoEurRef)) %>%
-    rename(IndicePrix = PCH_24_2) %>%
-    select(year, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var)
-
-  conso_matisse_ref <- sum((spending_ref_matisse$Gaz + spending_ref_matisse$AutreEner) * pondmen_sub$pondmen) / 1000000
-  conso_matisse_hor <- sum((spending_hor_matisse$Gaz + spending_hor_matisse$AutreEner) * pondmen_sub$pond_rew) / 1000000
-  gaz_matisse_ref <-  sum((spending_ref_matisse$Gaz) * pondmen_sub$pondmen) / 1000000
-  gaz_matisse_hor <-  sum((spending_hor_matisse$Gaz) * pondmen_sub$pond_rew) / 1000000
-  autre_matisse_ref <-  sum((spending_ref_matisse$AutreEner) * pondmen_sub$pondmen) / 1000000
-  autre_matisse_hor <-  sum((spending_hor_matisse$AutreEner) * pondmen_sub$pond_rew) / 1000000
-
-  gaz_matisse <- tibble(year = years,
-                            ConsoEurCour = c(conso_matisse_ref, conso_matisse_hor))
-  gaz_matisse <- gaz_matisse %>%
-    left_join(gaz_threeme %>% select(year, IndicePrix), by = "year") %>%
-    mutate(ConsoEurRef = ConsoEurCour / (IndicePrix) * first(IndicePrix)) %>%
-    mutate(ConsoEur_var = ConsoEurCour / first(ConsoEurCour)) %>%
-    mutate(ConsoPhys_var = ConsoEurRef / first(ConsoEurRef)) %>%
-    mutate(GazEur = c(gaz_matisse_ref, gaz_matisse_hor)) %>%
-    mutate(AutreEnerEur = c(autre_matisse_ref, autre_matisse_hor)) %>%
-    mutate(GazEurRef = GazEur / (IndicePrix) * first(IndicePrix)) %>%
-    mutate(AutreEnerEurRef = AutreEnerEur / (IndicePrix) * first(IndicePrix)) %>%
-    mutate(GazPhys_var = GazEurRef / first(GazEurRef)) %>%
-    mutate(AutreEnerPhys_var = AutreEnerEurRef / first(AutreEnerEurRef))
+  gaz_threeme <- ener_var_3me_df %>% filter(Type == "Gaz") %>% select(-Type)
+  gaz_matisse <- ener_var_mat_df %>% filter(Type == "Gaz") %>%
+    select(year, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var, GazEur,
+           AutreEnerEur, GazEurRef, AutreEnerEurRef, GazPhys_var, AutreEnerPhys_var)
 
   #Format
   theme_table <- ttheme_default(base_size = 7)
@@ -352,34 +301,16 @@ generate_compare_pdf <- function(MatisseData){
 
 
 # Elec ---------------------------------------------------------------------------------------------------------------------------------------------
-  elec_threeme <- sorties_df %>%
-    filter(Var %in% c("PCH_23_2", "CH_23_2")) %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
-    mutate(ConsoEurCour = CH_23_2 * PCH_23_2,
-           ConsoEurRef = CH_23_2 * first(PCH_23_2)) %>%
-    mutate(ConsoEur_var = ConsoEurCour / first(ConsoEurCour)) %>%
-    mutate(ConsoPhys_var = ConsoEurRef / first(ConsoEurRef)) %>%
-    rename(IndicePrix = PCH_23_2) %>%
-    select(year, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var)
+  elec_threeme <- ener_var_3me_df %>% filter(Type == "Elec") %>% select(-Type)
+  elec_matisse <- ener_var_mat_df %>% filter(Type == "Elec")
 
-  elec_matisse_ref <- sum(spending_ref_matisse$Elec * pondmen_sub$pondmen) / 1000000
-  elec_matisse_hor <- sum(spending_hor_matisse$Elec * pondmen_sub$pond_rew) / 1000000
-
-  elec_matisse <- tibble(year = years,
-                        ConsoEurCour = c(elec_matisse_ref, elec_matisse_hor))
-  elec_matisse <- elec_matisse %>%
-    left_join(elec_threeme %>% select(year, IndicePrix), by = "year") %>%
-    mutate(ConsoEurRef = ConsoEurCour / IndicePrix * first(IndicePrix)) %>%
-    mutate(ConsoEur_var = ConsoEurCour / first(ConsoEurCour)) %>%
-    mutate(ConsoPhys_var = ConsoEurRef / first(ConsoEurRef)) %>%
-    select(year, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var)
 
   #Split élec dom et transport
   #Car
   elec_car_threeme <- get_threeme_data(years = years,
                                        fields = "^EXP_AUTO_23_2$") %>% distinct()
   elec_car_threeme <- elec_car_threeme %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
     left_join(elec_threeme %>% select(year, IndicePrix), by = "year") %>%
     mutate(Elec_Car_EurCour = EXP_AUTO_23_2 * IndicePrix) %>%
     mutate(Elec_Car_EurRef = Elec_Car_EurCour / IndicePrix * first(IndicePrix)) %>%
@@ -387,11 +318,8 @@ generate_compare_pdf <- function(MatisseData){
     mutate(Elec_Car_PhysVar = Elec_Car_EurRef / first(Elec_Car_EurRef)) %>%
     select(-EXP_AUTO_23_2 )
 
-  DPE <- MatisseData$DPE
-  DPE_ini <- MatisseData$DPE_ini
-
-  elec_car_matisse_ref <- NA
-  elec_car_matisse_hor <- sum(MatisseData$save_inter_data$Carb2Elec * pondmen_sub$pond_rew) / 1000000
+  elec_car_matisse_ref <- elec_matisse %>% filter(year == MatisseParams$year_ref) %>% pull(ElecVehEur)
+  elec_car_matisse_hor <- elec_matisse %>% filter(year == MatisseParams$year_hor) %>% pull(ElecVehEur)
   elec_car_matisse <- elec_matisse %>%
     select(year, IndicePrix) %>%
     mutate(Elec_Car_EurCour = c(elec_car_matisse_ref, elec_car_matisse_hor)) %>%
@@ -403,7 +331,7 @@ generate_compare_pdf <- function(MatisseData){
   elec_dom_threeme <- get_threeme_data(years = years,
                                        fields = "^EXP_BUIL_H01_23_2$") %>% distinct()
   elec_dom_threeme <- elec_dom_threeme %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
     left_join(elec_threeme %>% select(year, IndicePrix), by = "year") %>%
     mutate(Elec_Dom_EurCour = EXP_BUIL_H01_23_2 * IndicePrix) %>%
     mutate(Elec_Dom_EurRef = Elec_Dom_EurCour / IndicePrix * first(IndicePrix)) %>%
@@ -411,8 +339,8 @@ generate_compare_pdf <- function(MatisseData){
     mutate(Elec_Dom_PhysVar = Elec_Dom_EurRef / first(Elec_Dom_EurRef)) %>%
     select(-EXP_BUIL_H01_23_2)
 
-  elec_dom_matisse_ref <- sum(DPE_ini$Elec * pondmen_sub$pondmen) / 1000000
-  elec_dom_matisse_hor <- elec_matisse_hor - elec_car_matisse_hor
+  elec_dom_matisse_ref <- elec_matisse %>% filter(year == MatisseParams$year_ref) %>% pull(ElecEur)
+  elec_dom_matisse_hor <- elec_matisse %>% filter(year == MatisseParams$year_hor) %>% pull(ElecEur)
   elec_dom_matisse <- elec_matisse %>%
     select(year, IndicePrix) %>%
     mutate(Elec_Dom_EurCour = c(elec_dom_matisse_ref, elec_dom_matisse_hor)) %>%
@@ -422,14 +350,20 @@ generate_compare_pdf <- function(MatisseData){
 
 
   # Conso Dom elec details
-  elec_conso_ref <- sum(DPE_ini$Elec * pondmen_sub$pondmen)
-  elec_conso_rew <- sum(DPE_ini$Elec * pondmen_sub$pond_rew)
-  elec_conso_step3 <- sum(MatisseData$save_inter_data$Elec_Step3 * pondmen_sub$pond_rew)
-  elec_conso_hor <- sum(MatisseData$spending_aggr$Elec * pondmen_sub$pond_rew)
+  elec_conso_ref <- sum((MatisseData$spending_aggr_ref$Elec + MatisseData$spending_aggr_ref$ElecVeh) * pondmen_sub$pondmen)
+  elec_conso_rew <- sum((MatisseData$spending_aggr_rew$Elec + MatisseData$spending_aggr_rew$ElecVeh) * pondmen_sub$pond_rew)
+  elec_conso_tend <- sum((MatisseData$spending_aggr_tend$Elec + MatisseData$spending_aggr_tend$ElecVeh) * pondmen_sub$pond_rew)
+  elec_conso_equip_house <- sum((MatisseData$spending_aggr_equip_house$Elec + MatisseData$spending_aggr_equip_house$ElecVeh) * pondmen_sub$pond_rew)
+  elec_conso_equip_trans <- sum((MatisseData$spending_aggr_equip_trans$Elec + MatisseData$spending_aggr_equip_trans$ElecVeh) * pondmen_sub$pond_rew)
+  elec_conso_trans <- sum((MatisseData$spending_aggr_trans$Elec + MatisseData$spending_aggr_trans$ElecVeh) * pondmen_sub$pond_rew)
   elec_conso_changes <- tibble(Conso_Ini = elec_conso_ref / 1000000,
                             Conso_Rew = elec_conso_rew / 1000000,
-                            Conso_Step3 = elec_conso_step3 / 1000000,
-                            Conso_Final = elec_conso_hor / 1000000)
+                            Conso_Tend = elec_conso_tend / 1000000,
+                            Conso_Equip_House = elec_conso_equip_house/ 1000000,
+                            Conso_Equip_Trans = elec_conso_equip_trans/ 1000000,
+                            Conso_Final = elec_conso_trans / 1000000)
+
+  elec_matisse <- elec_matisse %>% select(year, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var)
 
   #Format
   theme_table <- ttheme_default(base_size = 7)
@@ -459,11 +393,11 @@ generate_compare_pdf <- function(MatisseData){
     mutate(Var = str_replace(Var, "_2","")) %>%
     mutate(year = ifelse(year == MatisseParams$year_ref, "Ref", "Hor")) %>%
     rename(Class = Var) %>%
-    pivot_wider(id_cols = c(Class, year), names_from = year) %>%
+    pivot_wider(names_from = year) %>%
     mutate(Ref_pct = Ref / sum(Ref)) %>%
     mutate(Hor_pct = Hor / sum(Hor))
 
-
+  DPE <- MatisseData$DPE
   parc_dom_mat_ref <- DPE %>%
     mutate(SurfPond = SURFHAB * pondmen_sub$pondmen) %>%
     group_by(DPE_ini) %>%
@@ -508,7 +442,7 @@ generate_compare_pdf <- function(MatisseData){
   #   mutate(year = ifelse(year == MatisseParams$year_ref, "Ref", "Hor")) %>%
   #   mutate(Ener_year = paste(Ener, year, sep = "_")) %>%
   #   select(Class, Ener_year, value) %>%
-  #   pivot_wider(id_cols = c(Class, Ener_year), names_from = Ener_year)
+  #   pivot_wider(id_cols = Class, names_from = Ener_year)
   # cons_tot_threeme <- cons_dom_threeme %>%
   #   select(-Class) %>%
   #   colSums(na.rm = T)
@@ -566,7 +500,7 @@ generate_compare_pdf <- function(MatisseData){
                                        fields = c("^AUTO_H01_2$","^AUTO_ELEC_H01_2$", "^AUTO_TH_H01_2$"))
 
   car_park_threeme <- car_park_threeme %>%
-    pivot_wider(id_cols = c(Var, year), names_from = Var) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
     rename(Parc_Tot = AUTO_H01_2) %>%
     rename(Parc_Therm = AUTO_TH_H01_2) %>%
     rename(Parc_Elec = AUTO_ELEC_H01_2) %>%
@@ -626,6 +560,25 @@ generate_compare_pdf <- function(MatisseData){
   }
   grid.arrange(grobs = grob_list, ncol = 1)
 
+
+  #Effet transition
+  elec_trans <- mean(replace_nan(MatisseData$spending_aggr_trans$Elec / MatisseData$spending_aggr_equip_trans$Elec), na.rm = T)
+  gaz_trans <- mean(replace_nan(MatisseData$spending_aggr_trans$Gaz / MatisseData$spending_aggr_equip_trans$Gaz), na.rm = T)
+  fuel_trans <- mean(replace_nan(MatisseData$spending_aggr_trans$Carbu / MatisseData$spending_aggr_equip_trans$Carbu), na.rm = T)
+  trans_effect <- tibble(Type = c("Elec", "Gaz", "Fuel"),
+                         Value = c(elec_trans, gaz_trans, fuel_trans))
+
+  theme_table <- ttheme_default(base_size = 7)
+  df_list <- list(trans_effect = trans_effect)
+  grob_list <- list()
+  for(df_it in names(df_list)){
+    temp_df <- df_list[[df_it]]
+    col_names <- remove_item(colnames(temp_df), item = c("year", "Class"))
+    for(col_it in col_names){temp_df[[col_it]] <- format(temp_df[[col_it]],digits = 3)}
+    grob_list[[paste("Text_", df_it, sep = "")]] <- textGrob(df_it)
+    grob_list[[df_it]] <- tableGrob(temp_df, theme = theme_table)
+  }
+  grid.arrange(grobs = grob_list, ncol = 1)
 
 #Test conso véhicules
 # vehic_sub <- MatisseData$vehic
