@@ -133,5 +133,60 @@ calculate_3ME_conso <- function(){
 }
 
 
+# get_ener_var_3Me ----------------------------------------------------------------------------------------------------------------------------------------
+#' @title get_ener_var_3Me
+#' @description Loads the table for energy consumption from 3ME
+#'
+#' @return A tibble containing ThreeMe's variation in energy for Elec, Gaz and Fuel
+#' @export
+#'
+#' @examples
+#' get_ener_var_3Me()
+get_ener_var_3Me <- function(){
+
+  #Data
+  years <- c(MatisseParams$year_ref, MatisseParams$year_hor)
+  sorties_df <- get_threeme_data(years = years,
+                                 fields = c("^PCH_.._2$", "^CH_.._2$"))
+
+  #Essence
+  essence_threeme <- sorties_df %>%
+    filter(Var %in% c("PCH_22_2", "CH_22_2")) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
+    mutate(Type = "Essence") %>%
+    mutate(ConsoEurCour = CH_22_2 * PCH_22_2,
+           ConsoEurRef = CH_22_2 * first(PCH_22_2)) %>%
+    mutate(ConsoEur_var = ConsoEurCour / first(ConsoEurCour)) %>%
+    mutate(ConsoPhys_var = ConsoEurRef / first(ConsoEurRef)) %>%
+    rename(IndicePrix = PCH_22_2) %>%
+    select(year, Type, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var)
+
+  #Gaz
+  gaz_threeme <- sorties_df %>%
+    filter(Var %in% c("PCH_24_2", "CH_24_2")) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
+    mutate(Type = "Gaz") %>%
+    mutate(ConsoEurCour = CH_24_2 * PCH_24_2,
+           ConsoEurRef = CH_24_2 * first(PCH_24_2)) %>%
+    mutate(ConsoEur_var = ConsoEurCour / first(ConsoEurCour)) %>%
+    mutate(ConsoPhys_var = ConsoEurRef / first(ConsoEurRef)) %>%
+    rename(IndicePrix = PCH_24_2) %>%
+    select(year, Type, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var)
+
+  #Elec
+  elec_threeme <- sorties_df %>%
+    filter(Var %in% c("PCH_23_2", "CH_23_2")) %>%
+    pivot_wider(id_cols = year, names_from = Var) %>%
+    mutate(Type = "Elec") %>%
+    mutate(ConsoEurCour = CH_23_2 * PCH_23_2,
+           ConsoEurRef = CH_23_2 * first(PCH_23_2)) %>%
+    mutate(ConsoEur_var = ConsoEurCour / first(ConsoEurCour)) %>%
+    mutate(ConsoPhys_var = ConsoEurRef / first(ConsoEurRef)) %>%
+    rename(IndicePrix = PCH_23_2) %>%
+    select(year, Type, IndicePrix, ConsoEurCour, ConsoEurRef, ConsoEur_var, ConsoPhys_var)
+
+  return(bind_rows(essence_threeme, gaz_threeme, elec_threeme))
+
+}
 
 
